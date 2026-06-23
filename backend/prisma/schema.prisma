@@ -1,0 +1,312 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TRADER
+}
+
+enum OrderType {
+  LIMIT_BUY
+  LIMIT_SELL
+  MARKET_BUY
+  MARKET_SELL
+}
+
+enum OrderStatus {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
+  REJECTED
+}
+
+enum LogType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  AUDIT
+  SECURITY
+}
+
+enum NotificationType {
+  ORDER
+  TRADE
+  WALLET
+  SYSTEM
+  SECURITY
+}
+
+model User {
+  id                String    @id @default(cuid())
+  username          String    @unique
+  password          String
+  fullName          String    @map("full_name")
+  email             String    @unique
+  role              UserRole
+  isActive          Boolean   @default(true) @map("is_active")
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  wallet            Wallet?
+  orders            Order[]
+  portfolioHoldings PortfolioHolding[]
+  auditLogs         AuditLog[]
+  sessions          Session[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  tokenId           String    @unique @map("token_id")
+  expiresAt         DateTime  @map("expires_at")
+  invalidatedAt     DateTime? @map("invalidated_at")
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Wallet {
+  id                String    @id @default(cuid())
+  userId            String    @unique @map("user_id")
+  balance           Decimal   @default(0) @db.Decimal(18, 2)
+  lockedBalance     Decimal   @default(0) @map("locked_balance") @db.Decimal(18, 2)
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("wallets")
+}
+
+model Stock {
+  id                String    @id @default(cuid())
+  symbol            String    @unique
+  companyName       String    @map("company_name")
+  currentPrice      Decimal   @map("current_price") @db.Decimal(18, 2)
+  currentVolume     BigInt    @default(0) @map("current_volume")
+  previousPrice     Decimal   @map("previous_price") @db.Decimal(18, 2)
+  previousVolume    BigInt    @default(0) @map("previous_volume")
+  changePrice       Decimal   @default(0) @map("change_price") @db.Decimal(18, 2)
+  changeVolume      BigInt    @default(0) @map("change_volume")
+  changePercentage  Decimal   @default(0) @map("change_percentage") @db.Decimal(10, 4)
+  volumePercentage  Decimal   @default(0) @map("volume_percentage") @db.Decimal(10, 4)
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  orders            Order[]
+  trades            Trade[]
+  portfolioHoldings PortfolioHolding[]
+  priceHistory      StockPriceHistory[]
+
+  @@map("stocks")
+}
+
+model StockPriceHistory {
+  id                String    @id @default(cuid())
+  stockId           String    @map("stock_id")
+  timestamp         DateTime
+  open              Decimal   @db.Decimal(18, 2)
+  high              Decimal   @db.Decimal(18, 2)
+  low               Decimal   @db.Decimal(18, 2)
+  close             Decimal   @db.Decimal(18, 2)
+  volume            BigInt    @default(0)
+  interval          String    @default("1d")
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  stock Stock @relation(fields: [stockId], references: [id], onDelete: Cascade)
+
+  @@unique([stockId, timestamp, interval])
+  @@index([stockId, timestamp])
+  @@map("stock_price_history")
+}
+
+model Order {
+  id                String      @id @default(cuid())
+  userId            String      @map("user_id")
+  stockId           String      @map("stock_id")
+  type              OrderType
+  status            OrderStatus @default(OPEN)
+  quantity          Int
+  filledQuantity    Int         @default(0) @map("filled_quantity")
+  price             Decimal?    @db.Decimal(18, 2)
+  isSystemGenerated Boolean     @default(false) @map("is_system_generated")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  deletedAt         DateTime?   @map("deleted_at")
+  createdBy         String?     @map("created_by")
+  updatedBy         String?     @map("updated_by")
+
+  user      User    @relation(fields: [userId], references: [id])
+  stock     Stock   @relation(fields: [stockId], references: [id])
+  buyTrades  Trade[] @relation("BuyOrder")
+  sellTrades Trade[] @relation("SellOrder")
+
+  @@index([userId])
+  @@index([stockId])
+  @@index([status])
+  @@map("orders")
+}
+
+model Trade {
+  id                String   @id @default(cuid())
+  tradeId           String   @unique @map("trade_id")
+  buyOrderId        String   @map("buy_order_id")
+  sellOrderId       String   @map("sell_order_id")
+  stockId           String   @map("stock_id")
+  quantity          Int
+  price             Decimal  @db.Decimal(18, 2)
+  executedAt        DateTime @default(now()) @map("executed_at")
+  isSystemGenerated Boolean  @default(false) @map("is_system_generated")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?  @map("created_by")
+  updatedBy         String?  @map("updated_by")
+
+  buyOrder  Order @relation("BuyOrder", fields: [buyOrderId], references: [id])
+  sellOrder Order @relation("SellOrder", fields: [sellOrderId], references: [id])
+  stock     Stock @relation(fields: [stockId], references: [id])
+
+  @@index([stockId])
+  @@index([executedAt])
+  @@map("trades")
+}
+
+model PortfolioHolding {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  stockId           String    @map("stock_id")
+  quantity          Int       @default(0)
+  averageBuyPrice   Decimal   @default(0) @map("average_buy_price") @db.Decimal(18, 2)
+  investedAmount    Decimal   @default(0) @map("invested_amount") @db.Decimal(18, 2)
+  realizedPnL       Decimal   @default(0) @map("realized_pnl") @db.Decimal(18, 2)
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  user  User  @relation(fields: [userId], references: [id])
+  stock Stock @relation(fields: [stockId], references: [id])
+
+  @@unique([userId, stockId])
+  @@map("portfolio_holdings")
+}
+
+model AuditLog {
+  id                String    @id @default(cuid())
+  userId            String?   @map("user_id")
+  action            String
+  entityType        String?   @map("entity_type")
+  entityId          String?   @map("entity_id")
+  metadata          Json?
+  logType           LogType   @default(AUDIT) @map("log_type")
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemLog {
+  id                String    @id @default(cuid())
+  message           String
+  context           String?
+  metadata          Json?
+  logType           LogType   @default(INFO) @map("log_type")
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  @@index([logType])
+  @@index([createdAt])
+  @@map("system_logs")
+}
+
+model EventStore {
+  id                String    @id @default(cuid())
+  eventName         String    @map("event_name")
+  payload           Json
+  isSystemGenerated Boolean   @default(false) @map("is_system_generated")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  createdBy         String?   @map("created_by")
+  updatedBy         String?   @map("updated_by")
+
+  @@index([eventName])
+  @@index([createdAt])
+  @@map("event_store")
+}
+
+model Notification {
+  id                String           @id @default(cuid())
+  userId            String           @map("user_id")
+  type              NotificationType
+  title             String
+  message           String
+  link              String?
+  metadata          Json?
+  isRead            Boolean          @default(false) @map("is_read")
+  readAt            DateTime?        @map("read_at")
+  isSystemGenerated Boolean          @default(false) @map("is_system_generated")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime?        @map("deleted_at")
+  createdBy         String?          @map("created_by")
+  updatedBy         String?          @map("updated_by")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}

@@ -1,0 +1,23 @@
+/**
+ * Module scaffold generator pattern.
+ * Each module follows: controllers / services / repositories / dto / schemas / entities / events / tests
+ */
+
+export const MODULE_NAMES = [
+  'auth',
+  'user',
+  'stock',
+  'wallet',
+  'order',
+  'matching',
+  'trade',
+  'portfolio',
+  'notification',
+  'audit',
+  'dashboard',
+  'realtime',
+  'seeder',
+  'system',
+] as const;
+
+export type ModuleName = (typeof MODULE_NAMES)[number];
