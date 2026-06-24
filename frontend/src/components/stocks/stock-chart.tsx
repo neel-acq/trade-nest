@@ -7,9 +7,10 @@ import type { StockHistoryPoint } from '@/types';
 interface StockChartProps {
   data: StockHistoryPoint[];
   height?: number;
+  dark?: boolean;
 }
 
-export function StockChart({ data, height = 400 }: StockChartProps) {
+export function StockChart({ data, height = 400, dark = false }: StockChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -17,20 +18,24 @@ export function StockChart({ data, height = 400 }: StockChartProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const textColor = dark ? '#94a3b8' : '#334155';
+    const gridColor = dark ? '#1e293b' : '#e2e8f0';
+    const borderColor = dark ? '#334155' : '#cbd5e1';
+
     const chart = createChart(containerRef.current, {
       height,
-      layout: { background: { color: 'transparent' }, textColor: '#334155' },
-      grid: { vertLines: { color: '#e2e8f0' }, horzLines: { color: '#e2e8f0' } },
-      timeScale: { borderColor: '#cbd5e1' },
-      rightPriceScale: { borderColor: '#cbd5e1' },
+      layout: { background: { color: 'transparent' }, textColor },
+      grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+      timeScale: { borderColor },
+      rightPriceScale: { borderColor },
     });
 
     const series = chart.addCandlestickSeries({
-      upColor: '#16a34a',
-      downColor: '#dc2626',
+      upColor: dark ? '#22c55e' : '#16a34a',
+      downColor: dark ? '#ef4444' : '#dc2626',
       borderVisible: false,
-      wickUpColor: '#16a34a',
-      wickDownColor: '#dc2626',
+      wickUpColor: dark ? '#22c55e' : '#16a34a',
+      wickDownColor: dark ? '#ef4444' : '#dc2626',
     });
 
     chartRef.current = chart;
@@ -49,7 +54,7 @@ export function StockChart({ data, height = 400 }: StockChartProps) {
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [height]);
+  }, [height, dark]);
 
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
@@ -67,5 +72,5 @@ export function StockChart({ data, height = 400 }: StockChartProps) {
     chartRef.current?.timeScale().fitContent();
   }, [data]);
 
-  return <div ref={containerRef} className="w-full rounded-md border" />;
+  return <div ref={containerRef} className="w-full" />;
 }

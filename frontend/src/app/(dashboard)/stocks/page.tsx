@@ -4,8 +4,12 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/trading/page-header';
+import { Panel } from '@/components/trading/panel';
 import type { SafeStock } from '@/types';
 import { fetchStocks } from '@/lib/stocks';
+import { formatPercent, formatPrice, formatQty, priceClass } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export default function StocksPage() {
   const [stocks, setStocks] = useState<SafeStock[]>([]);
@@ -47,15 +51,15 @@ export default function StocksPage() {
   const totalPages = Math.ceil(total / limit) || 1;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Stocks</h1>
-        <p className="text-muted-foreground text-sm">Indian equities — search, filter, sort</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Markets"
+        description="NSE equities — live prices, search, and trade"
+      />
 
       <div className="flex flex-wrap gap-3">
         <Input
-          className="max-w-xs"
+          className="max-w-xs h-9 bg-background"
           placeholder="Search symbol or company..."
           value={search}
           onChange={(e) => {
@@ -64,7 +68,7 @@ export default function StocksPage() {
           }}
         />
         <select
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
         >
@@ -75,7 +79,7 @@ export default function StocksPage() {
           <option value="currentVolume">Volume</option>
         </select>
         <select
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
         >
@@ -84,51 +88,72 @@ export default function StocksPage() {
         </select>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/50">
-            <tr>
-              <th className="px-4 py-3 text-left">Symbol</th>
-              <th className="px-4 py-3 text-left">Company</th>
-              <th className="px-4 py-3 text-right">Price</th>
-              <th className="px-4 py-3 text-right">Change</th>
-              <th className="px-4 py-3 text-right">Volume</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      <Panel dense>
+        <div className="overflow-x-auto">
+          <table className="trading-table">
+            <thead>
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  Loading...
-                </td>
+                <th>Symbol</th>
+                <th>Company</th>
+                <th className="text-right">LTP</th>
+                <th className="text-right">Change</th>
+                <th className="text-right">Volume</th>
+                <th className="text-right">Action</th>
               </tr>
-            ) : (
-              stocks.map((stock) => (
-                <tr key={stock.id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <Link href={`/stocks/${stock.symbol}`} className="font-medium text-primary hover:underline">
-                      {stock.symbol}
-                    </Link>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="text-center text-muted-foreground py-8">
+                    Loading markets...
                   </td>
-                  <td className="px-4 py-3">{stock.companyName}</td>
-                  <td className="px-4 py-3 text-right">₹{stock.currentPrice.toLocaleString('en-IN')}</td>
-                  <td
-                    className={`px-4 py-3 text-right ${stock.changePercentage >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                  >
-                    {stock.changePercentage >= 0 ? '+' : ''}
-                    {stock.changePercentage.toFixed(2)}%
-                  </td>
-                  <td className="px-4 py-3 text-right">{stock.currentVolume.toLocaleString('en-IN')}</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                stocks.map((stock) => (
+                  <tr key={stock.id}>
+                    <td>
+                      <Link
+                        href={`/stocks/${stock.symbol}`}
+                        className="font-semibold hover:text-primary"
+                      >
+                        {stock.symbol}
+                      </Link>
+                    </td>
+                    <td className="text-muted-foreground max-w-[200px] truncate">{stock.companyName}</td>
+                    <td className={cn('text-right font-medium', priceClass)}>
+                      {formatPrice(stock.currentPrice)}
+                    </td>
+                    <td
+                      className={cn(
+                        'text-right font-medium',
+                        priceClass,
+                        stock.changePercentage >= 0 ? 'text-gain' : 'text-loss',
+                      )}
+                    >
+                      {formatPercent(stock.changePercentage)}
+                    </td>
+                    <td className={cn('text-right text-muted-foreground', priceClass)}>
+                      {formatQty(stock.currentVolume)}
+                    </td>
+                    <td className="text-right">
+                      <Link
+                        href={`/stocks/${stock.symbol}`}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Trade →
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Page {page} of {totalPages} ({total} stocks)
+        <p className="text-xs text-muted-foreground">
+          Page {page} of {totalPages} · {total} stocks
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>

@@ -3,12 +3,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AllocationChart } from '@/components/dashboard/allocation-chart';
+import { KpiCard } from '@/components/trading/kpi-card';
+import { PageHeader } from '@/components/trading/page-header';
+import { Panel } from '@/components/trading/panel';
+import { SideBadge } from '@/components/trading/side-badge';
+import { StatusBadge } from '@/components/trading/status-badge';
 import { useUserRealtime } from '@/hooks/use-realtime';
 import type { AdminDashboardOverview, TraderDashboardOverview } from '@/types';
 import { fetchAdminDashboard, fetchMyDashboard } from '@/lib/dashboard';
+import { formatPrice, priceClass } from '@/lib/format';
 import { REALTIME_EVENTS } from '@/lib/realtime-events';
 import { formatInr } from '@/lib/wallets';
 import { useAuthStore } from '@/stores/auth-store';
+import { cn } from '@/lib/utils';
+import { CandlestickChart } from 'lucide-react';
 
 const DASHBOARD_REFRESH_EVENTS = [
   REALTIME_EVENTS.WALLET_UPDATED,
@@ -45,85 +53,108 @@ export default function DashboardPage() {
   useUserRealtime(loadDashboard, DASHBOARD_REFRESH_EVENTS);
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading dashboard...</p>;
+    return <p className="text-muted-foreground text-sm">Loading dashboard...</p>;
   }
 
   if (!dashboard) {
-    return <p className="text-destructive">Failed to load dashboard.</p>;
+    return <p className="text-destructive text-sm">Failed to load dashboard.</p>;
   }
 
   const pnlPositive = dashboard.portfolio.totalPnL >= 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">
-          Net worth, portfolio allocation, and recent activity
-        </p>
+    <div className="space-y-5">
+      <PageHeader
+        title="Trading Dashboard"
+        description="Portfolio performance, allocation, and recent market activity"
+        action={
+          <Link
+            href="/stocks"
+            className="inline-flex h-8 items-center rounded-md bg-gain px-3 text-xs font-semibold text-white hover:bg-gain/90"
+          >
+            <CandlestickChart className="h-4 w-4 mr-1.5" />
+            Trade Now
+          </Link>
+        }
+      />
+
+      <div className="trading-panel p-5 bg-gradient-to-br from-card to-secondary/30">
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">Net Worth</p>
+        <p className={cn('text-4xl font-bold mt-1', priceClass)}>{formatInr(dashboard.netWorth)}</p>
+        <div className="flex flex-wrap gap-6 mt-4 text-sm">
+          <div>
+            <p className="text-muted-foreground text-xs">Total P&L</p>
+            <p className={cn('font-semibold', priceClass, pnlPositive ? 'text-gain' : 'text-loss')}>
+              {formatInr(dashboard.portfolio.totalPnL)} ({pnlPositive ? '+' : ''}
+              {dashboard.portfolio.totalPnLPercent.toFixed(2)}%)
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Portfolio</p>
+            <p className={cn('font-semibold', priceClass)}>
+              {formatInr(dashboard.portfolio.totalCurrentValue)}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground text-xs">Available Cash</p>
+            <p className={cn('font-semibold text-gain', priceClass)}>
+              {formatInr(dashboard.wallet.availableBalance)}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Net Worth" value={formatInr(dashboard.netWorth)} />
-        <KpiCard label="Available Cash" value={formatInr(dashboard.wallet.availableBalance)} />
-        <KpiCard label="Portfolio Value" value={formatInr(dashboard.portfolio.totalCurrentValue)} />
-        <KpiCard
-          label="Total P&L"
-          value={formatInr(dashboard.portfolio.totalPnL)}
-          sub={`${pnlPositive ? '+' : ''}${dashboard.portfolio.totalPnLPercent.toFixed(2)}%`}
-          tone={dashboard.portfolio.totalPnL}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard label="Open Orders" value={String(dashboard.orders.open + dashboard.orders.partial)} />
         <KpiCard label="Filled Orders" value={String(dashboard.orders.filled)} />
         <KpiCard label="Total Trades" value={String(dashboard.trades.totalTrades)} />
-        <KpiCard label="Trade Turnover" value={formatInr(dashboard.trades.totalTurnover)} />
+        <KpiCard label="Turnover" value={formatInr(dashboard.trades.totalTurnover)} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <section className="rounded-lg border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Portfolio Allocation</h2>
-            <Link href="/portfolio" className="text-sm text-primary hover:underline">
-              View portfolio
-            </Link>
-          </div>
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Panel title="Portfolio Allocation">
           <AllocationChart allocation={dashboard.allocation} />
-        </section>
+        </Panel>
 
-        <section className="rounded-lg border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Top Holdings</h2>
-            <Link href="/portfolio" className="text-sm text-primary hover:underline">
-              See all
+        <Panel
+          title="Top Holdings"
+          action={
+            <Link href="/portfolio" className="text-xs text-primary hover:underline">
+              View all
             </Link>
-          </div>
+          }
+        >
           {dashboard.topHoldings.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No holdings yet.</p>
+            <p className="text-sm text-muted-foreground">No holdings yet. Start trading in Markets.</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="trading-table">
               <thead>
-                <tr className="text-left text-muted-foreground">
-                  <th className="pb-2 font-normal">Symbol</th>
-                  <th className="pb-2 font-normal text-right">Qty</th>
-                  <th className="pb-2 font-normal text-right">Value</th>
-                  <th className="pb-2 font-normal text-right">P&L</th>
+                <tr>
+                  <th>Symbol</th>
+                  <th className="text-right">Qty</th>
+                  <th className="text-right">Value</th>
+                  <th className="text-right">P&L</th>
                 </tr>
               </thead>
               <tbody>
                 {dashboard.topHoldings.map((holding) => (
-                  <tr key={holding.id} className="border-t">
-                    <td className="py-2">
-                      <Link href={`/stocks/${holding.symbol}`} className="font-medium hover:underline">
+                  <tr key={holding.id}>
+                    <td>
+                      <Link
+                        href={`/stocks/${holding.symbol}`}
+                        className="font-semibold hover:text-primary"
+                      >
                         {holding.symbol}
                       </Link>
                     </td>
-                    <td className="py-2 text-right">{holding.quantity}</td>
-                    <td className="py-2 text-right">{formatInr(holding.currentValue)}</td>
+                    <td className={cn('text-right', priceClass)}>{holding.quantity}</td>
+                    <td className={cn('text-right', priceClass)}>{formatInr(holding.currentValue)}</td>
                     <td
-                      className={`py-2 text-right ${holding.unrealizedPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                      className={cn(
+                        'text-right font-medium',
+                        priceClass,
+                        holding.unrealizedPnL >= 0 ? 'text-gain' : 'text-loss',
+                      )}
                     >
                       {formatInr(holding.unrealizedPnL)}
                     </td>
@@ -132,100 +163,54 @@ export default function DashboardPage() {
               </tbody>
             </table>
           )}
-        </section>
+        </Panel>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <ActivityTable
+      <div className="grid lg:grid-cols-2 gap-4">
+        <ActivityPanel
           title="Recent Orders"
           href="/orders"
           empty="No orders yet."
           rows={dashboard.recentOrders.map((order) => ({
             id: order.id,
             primary: order.symbol,
-            secondary: order.type.replace('_', ' '),
-            value: order.price ? formatInr(order.price) : 'Market',
-            status: order.status,
+            badge: <SideBadge side={order.type} />,
+            value: order.price ? formatPrice(order.price) : 'Market',
+            status: <StatusBadge status={order.status} />,
           }))}
         />
-        <ActivityTable
+        <ActivityPanel
           title="Recent Trades"
           href="/trades"
           empty="No trades yet."
           rows={dashboard.recentTrades.map((trade) => ({
             id: trade.id,
             primary: trade.symbol,
-            secondary: trade.side ?? '—',
-            value: formatInr(trade.price),
-            status: `${trade.quantity} qty`,
+            badge: (
+              <span className="text-xs text-muted-foreground">{trade.quantity} qty</span>
+            ),
+            value: formatPrice(trade.price),
+            status: <span className="text-xs text-muted-foreground">{trade.side}</span>,
           }))}
         />
       </div>
 
       {adminDashboard && (
-        <section className="rounded-lg border p-4 space-y-4">
-          <h2 className="font-semibold">Platform Overview (Admin)</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Panel title="Platform Overview (Admin)">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <KpiCard label="Users" value={String(adminDashboard.users.total)} />
             <KpiCard label="Traders" value={String(adminDashboard.users.traders)} />
             <KpiCard label="Admins" value={String(adminDashboard.users.admins)} />
-            <KpiCard label="Platform Orders" value={String(adminDashboard.platform.totalOrders)} />
-            <KpiCard label="Platform Trades" value={String(adminDashboard.platform.totalTrades)} />
+            <KpiCard label="Orders" value={String(adminDashboard.platform.totalOrders)} />
+            <KpiCard label="Trades" value={String(adminDashboard.platform.totalTrades)} />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Platform turnover: {formatInr(adminDashboard.platform.totalTurnover)}
-          </p>
-        </section>
+        </Panel>
       )}
-
-      <div className="flex flex-wrap gap-3">
-        <Link
-          href="/stocks"
-          className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Browse Stocks
-        </Link>
-        <Link
-          href="/orders"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
-        >
-          Orders
-        </Link>
-        <Link
-          href="/wallet"
-          className="inline-flex h-10 items-center justify-center rounded-md border border-input bg-background px-4 text-sm font-medium hover:bg-accent"
-        >
-          Wallet
-        </Link>
-      </div>
     </div>
   );
 }
 
-function KpiCard({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: number;
-}) {
-  const color =
-    tone !== undefined ? (tone >= 0 ? 'text-green-600' : 'text-red-600') : undefined;
-
-  return (
-    <div className="rounded-lg border p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={`text-xl font-bold mt-1 ${color ?? ''}`}>{value}</p>
-      {sub && <p className={`text-xs mt-1 ${color ?? 'text-muted-foreground'}`}>{sub}</p>}
-    </div>
-  );
-}
-
-function ActivityTable({
+function ActivityPanel({
   title,
   href,
   empty,
@@ -234,34 +219,41 @@ function ActivityTable({
   title: string;
   href: string;
   empty: string;
-  rows: { id: string; primary: string; secondary: string; value: string; status: string }[];
+  rows: {
+    id: string;
+    primary: string;
+    badge: React.ReactNode;
+    value: string;
+    status: React.ReactNode;
+  }[];
 }) {
   return (
-    <section className="rounded-lg border p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">{title}</h2>
-        <Link href={href} className="text-sm text-primary hover:underline">
+    <Panel
+      title={title}
+      action={
+        <Link href={href} className="text-xs text-primary hover:underline">
           View all
         </Link>
-      </div>
+      }
+    >
       {rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">{empty}</p>
       ) : (
-        <table className="w-full text-sm">
+        <table className="trading-table">
           <tbody>
             {rows.map((row) => (
-              <tr key={row.id} className="border-t first:border-0">
-                <td className="py-2">
-                  <p className="font-medium">{row.primary}</p>
-                  <p className="text-xs text-muted-foreground">{row.secondary}</p>
+              <tr key={row.id}>
+                <td>
+                  <p className="font-semibold">{row.primary}</p>
+                  <div className="mt-0.5">{row.badge}</div>
                 </td>
-                <td className="py-2 text-right">{row.value}</td>
-                <td className="py-2 text-right text-muted-foreground">{row.status}</td>
+                <td className={cn('text-right', priceClass)}>{row.value}</td>
+                <td className="text-right">{row.status}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-    </section>
+    </Panel>
   );
 }

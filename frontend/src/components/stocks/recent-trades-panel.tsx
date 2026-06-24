@@ -3,13 +3,16 @@
 import { useEffect, useState } from 'react';
 import type { SafeTrade } from '@/types';
 import { fetchStockTrades } from '@/lib/trades';
+import { formatPrice, priceClass } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface RecentTradesPanelProps {
   symbol: string;
   refreshKey?: number;
+  compact?: boolean;
 }
 
-export function RecentTradesPanel({ symbol, refreshKey = 0 }: RecentTradesPanelProps) {
+export function RecentTradesPanel({ symbol, refreshKey = 0, compact }: RecentTradesPanelProps) {
   const [trades, setTrades] = useState<SafeTrade[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -17,7 +20,7 @@ export function RecentTradesPanel({ symbol, refreshKey = 0 }: RecentTradesPanelP
     async function load() {
       setLoading(true);
       try {
-        const result = await fetchStockTrades(symbol, { limit: 10 });
+        const result = await fetchStockTrades(symbol, { limit: compact ? 12 : 10 });
         setTrades(result.data);
       } catch {
         setTrades([]);
@@ -27,47 +30,78 @@ export function RecentTradesPanel({ symbol, refreshKey = 0 }: RecentTradesPanelP
     }
 
     if (symbol) load();
-  }, [symbol, refreshKey]);
+  }, [symbol, refreshKey, compact]);
+
+  if (compact) {
+    return (
+      <div className="max-h-64 overflow-y-auto">
+        {loading ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">Loading...</p>
+        ) : trades.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-muted-foreground">No trades yet</p>
+        ) : (
+          <table className="trading-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th className="text-right">Price</th>
+                <th className="text-right">Qty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map((trade) => (
+                <tr key={trade.id}>
+                  <td className="text-muted-foreground text-xs">
+                    {new Date(trade.executedAt).toLocaleTimeString('en-IN')}
+                  </td>
+                  <td className={cn('text-right font-medium', priceClass)}>{formatPrice(trade.price)}</td>
+                  <td className={cn('text-right', priceClass)}>{trade.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-4">
       <h2 className="text-lg font-semibold">Recent Trades</h2>
-      <div className="rounded-md border overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/50">
+      <div className="trading-panel overflow-x-auto">
+        <table className="trading-table">
+          <thead>
             <tr>
-              <th className="px-3 py-2 text-left font-normal text-muted-foreground">Time</th>
-              <th className="px-3 py-2 text-right font-normal text-muted-foreground">Price</th>
-              <th className="px-3 py-2 text-right font-normal text-muted-foreground">Qty</th>
-              <th className="px-3 py-2 text-left font-normal text-muted-foreground">Buyer</th>
-              <th className="px-3 py-2 text-left font-normal text-muted-foreground">Seller</th>
+              <th>Time</th>
+              <th className="text-right">Price</th>
+              <th className="text-right">Qty</th>
+              <th>Buyer</th>
+              <th>Seller</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={5} className="text-center text-muted-foreground py-6">
                   Loading...
                 </td>
               </tr>
             ) : trades.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={5} className="text-center text-muted-foreground py-6">
                   No trades yet
                 </td>
               </tr>
             ) : (
               trades.map((trade) => (
-                <tr key={trade.id} className="border-t">
-                  <td className="px-3 py-2 text-muted-foreground">
+                <tr key={trade.id}>
+                  <td className="text-muted-foreground">
                     {new Date(trade.executedAt).toLocaleTimeString('en-IN')}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">
-                    ₹{trade.price.toLocaleString('en-IN')}
-                  </td>
-                  <td className="px-3 py-2 text-right">{trade.quantity}</td>
-                  <td className="px-3 py-2">{trade.buyer.username}</td>
-                  <td className="px-3 py-2">{trade.seller.username}</td>
+                  <td className={cn('text-right font-medium', priceClass)}>{formatPrice(trade.price)}</td>
+                  <td className={cn('text-right', priceClass)}>{trade.quantity}</td>
+                  <td>{trade.buyer.username}</td>
+                  <td>{trade.seller.username}</td>
                 </tr>
               ))
             )}

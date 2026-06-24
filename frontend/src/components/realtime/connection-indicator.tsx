@@ -8,10 +8,10 @@ export function ConnectionIndicator() {
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span
-        className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-amber-500'}`}
+        className={`h-2 w-2 rounded-full ${connected ? 'bg-gain' : 'bg-amber-400'}`}
         aria-hidden
       />
-      <span>{connected ? 'Live' : 'Connecting...'}</span>
+      <span className="hidden sm:inline">{connected ? 'Live feed' : 'Connecting...'}</span>
     </div>
   );
 }

@@ -22,26 +22,37 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+    --gain: 142 71% 40%;
+    --loss: 0 72% 51%;
+    --bid: 142 71% 40%;
+    --ask: 0 72% 51%;
+    --surface-elevated: 210 40% 98%;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+  .trading-theme {
+    --background: 224 28% 7%;
+    --foreground: 210 25% 96%;
+    --card: 224 22% 10%;
+    --card-foreground: 210 25% 96%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 224 28% 7%;
+    --secondary: 224 18% 14%;
+    --secondary-foreground: 210 25% 96%;
+    --muted: 224 18% 14%;
+    --muted-foreground: 215 14% 58%;
+    --accent: 224 18% 16%;
+    --accent-foreground: 210 25% 96%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 25% 96%;
+    --border: 224 16% 18%;
+    --input: 224 16% 18%;
+    --ring: 217 91% 60%;
+    --gain: 142 71% 45%;
+    --loss: 0 72% 58%;
+    --bid: 142 71% 45%;
+    --ask: 0 72% 58%;
+    --surface-elevated: 224 20% 12%;
+    color-scheme: dark;
   }
 }
 
@@ -50,6 +61,44 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .trading-panel {
+    @apply rounded-lg border border-border bg-card shadow-sm;
+  }
+
+  .trading-theme .trading-panel {
+    @apply bg-card/80 backdrop-blur-sm border-border/80;
+  }
+
+  .trading-table {
+    @apply w-full text-sm;
+  }
+
+  .trading-table thead {
+    @apply border-b border-border/60 bg-muted/40;
+  }
+
+  .trading-table th {
+    @apply px-3 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-muted-foreground;
+  }
+
+  .trading-table td {
+    @apply px-3 py-2.5;
+  }
+
+  .trading-table tbody tr {
+    @apply border-b border-border/40 transition-colors hover:bg-accent/40;
+  }
+
+  .trading-table tbody tr:last-child {
+    @apply border-0;
+  }
+
+  .wallet-chip {
+    @apply inline-flex items-center gap-2 rounded-md border border-border/80 bg-secondary/60 px-3 py-1.5 text-xs;
   }
 }

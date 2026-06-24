@@ -6,12 +6,14 @@ import Link from 'next/link';
 import { StockChart } from '@/components/stocks/stock-chart';
 import { OrderBookPanel } from '@/components/stocks/order-book-panel';
 import { RecentTradesPanel } from '@/components/stocks/recent-trades-panel';
-import { OrderModal } from '@/components/modals/order-modal';
-import { Button } from '@/components/ui/button';
+import { OrderTicket } from '@/components/trading/order-ticket';
+import { Panel } from '@/components/trading/panel';
 import { useStockRealtime } from '@/hooks/use-realtime';
 import type { SafeStock, StockHistoryPoint } from '@/types';
 import { fetchOrderBook, type OrderBookSnapshot } from '@/lib/matching';
 import { fetchStockBySymbol, fetchStockHistory } from '@/lib/stocks';
+import { formatPercent, formatPrice, formatQty, priceClass } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 export default function StockDetailPage() {
   const params = useParams<{ symbol: string }>();
@@ -20,7 +22,6 @@ export default function StockDetailPage() {
   const [history, setHistory] = useState<StockHistoryPoint[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBookSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [orderSide, setOrderSide] = useState<'BUY' | 'SELL' | null>(null);
   const [tradesTick, setTradesTick] = useState(0);
 
   const refreshOrderBook = useCallback(async () => {
@@ -29,7 +30,7 @@ export default function StockDetailPage() {
       const bookData = await fetchOrderBook(symbol);
       setOrderBook(bookData);
     } catch {
-      /* order book refresh is best-effort */
+      /* best-effort */
     }
   }, [symbol]);
 
@@ -40,7 +41,7 @@ export default function StockDetailPage() {
       const stockData = await fetchStockBySymbol(symbol);
       setStock(stockData);
     } catch {
-      /* price refresh is best-effort */
+      /* best-effort */
     }
   }, [symbol, refreshOrderBook]);
 
@@ -69,7 +70,7 @@ export default function StockDetailPage() {
   }, [symbol]);
 
   if (loading) {
-    return <p className="text-muted-foreground">Loading {symbol}...</p>;
+    return <p className="text-muted-foreground text-sm">Loading {symbol}...</p>;
   }
 
   if (!stock) {
@@ -77,71 +78,73 @@ export default function StockDetailPage() {
       <div className="space-y-4">
         <p>Stock not found.</p>
         <Link href="/stocks" className="text-sm text-primary hover:underline">
-          Back to stocks
+          Back to markets
         </Link>
       </div>
     );
   }
 
+  const positive = stock.changePercentage >= 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <Link href="/stocks" className="text-sm text-muted-foreground hover:underline">
-            ← Back to stocks
+          <Link href="/stocks" className="text-xs text-muted-foreground hover:text-primary">
+            ← Markets
           </Link>
-          <h1 className="text-2xl font-bold mt-2">{stock.symbol}</h1>
-          <p className="text-muted-foreground">{stock.companyName}</p>
+          <div className="flex items-baseline gap-3 mt-1">
+            <h1 className="text-2xl font-bold tracking-tight">{stock.symbol}</h1>
+            <span className="text-sm text-muted-foreground">{stock.companyName}</span>
+          </div>
         </div>
         <div className="text-right">
-          <p className="text-3xl font-bold">₹{stock.currentPrice.toLocaleString('en-IN')}</p>
-          <p className={stock.changePercentage >= 0 ? 'text-green-600' : 'text-red-600'}>
-            {stock.changePrice >= 0 ? '+' : ''}
-            {stock.changePrice.toFixed(2)} ({stock.changePercentage.toFixed(2)}%)
+          <p className={cn('text-3xl font-bold', priceClass)}>{formatPrice(stock.currentPrice)}</p>
+          <p className={cn('text-sm font-medium', positive ? 'text-gain' : 'text-loss')}>
+            {positive ? '+' : ''}
+            {stock.changePrice.toFixed(2)} ({formatPercent(stock.changePercentage)})
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Stat label="Volume" value={stock.currentVolume.toLocaleString('en-IN')} />
-        <Stat label="Prev Price" value={`₹${stock.previousPrice.toLocaleString('en-IN')}`} />
-        <Stat label="Change Vol" value={stock.changeVolume.toLocaleString('en-IN')} />
-        <Stat label="Vol %" value={`${stock.volumePercentage.toFixed(2)}%`} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Stat label="Volume" value={formatQty(stock.currentVolume)} />
+        <Stat label="Prev Close" value={formatPrice(stock.previousPrice)} />
+        <Stat label="Change Vol" value={formatQty(stock.changeVolume)} />
+        <Stat label="Vol Change" value={formatPercent(stock.volumePercentage)} />
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Price History (90 days)</h2>
-        <StockChart data={history} />
+      <div className="grid xl:grid-cols-[1fr_320px] gap-4">
+        <div className="space-y-4 min-w-0">
+          <Panel title="Chart · 90D" dense>
+            <div className="p-2">
+              <StockChart data={history} height={380} dark />
+            </div>
+          </Panel>
+
+          <div className="grid lg:grid-cols-2 gap-4">
+            <Panel title="Order Book" dense>
+              <OrderBookPanel snapshot={orderBook} loading={false} compact />
+            </Panel>
+            <Panel title="Recent Trades" dense>
+              <RecentTradesPanel symbol={symbol} refreshKey={tradesTick} compact />
+            </Panel>
+          </div>
+        </div>
+
+        <div className="xl:sticky xl:top-4 xl:self-start">
+          <OrderTicket stock={stock} onSuccess={refreshLiveData} />
+        </div>
       </div>
-
-      <OrderBookPanel snapshot={orderBook} loading={loading} />
-
-      <RecentTradesPanel symbol={symbol} refreshKey={tradesTick} />
-
-      <div className="flex gap-3">
-        <Button onClick={() => setOrderSide('BUY')}>Buy</Button>
-        <Button variant="outline" onClick={() => setOrderSide('SELL')}>
-          Sell
-        </Button>
-      </div>
-
-      {orderSide && stock && (
-        <OrderModal
-          stock={stock}
-          side={orderSide}
-          onClose={() => setOrderSide(null)}
-          onSuccess={refreshOrderBook}
-        />
-      )}
     </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium mt-1">{value}</p>
+    <div className="trading-panel px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn('text-sm font-semibold mt-0.5', priceClass)}>{value}</p>
     </div>
   );
 }

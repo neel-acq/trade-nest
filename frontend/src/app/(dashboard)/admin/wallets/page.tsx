@@ -3,6 +3,7 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable } from '@/components/data-table/data-table';
+import { PageHeader } from '@/components/trading/page-header';
 import type { SafeWalletWithUser } from '@/types';
 import { fetchWallets, formatInr } from '@/lib/wallets';
 
@@ -65,11 +66,11 @@ export default function AdminWalletsPage() {
   }, [load]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Wallet Management</h1>
-        <p className="text-muted-foreground text-sm">View all user wallets (ADMIN)</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="Wallet Management"
+        description="View balances, locked funds, and available cash across all users"
+      />
 
       <DataTable
         columns={columns}

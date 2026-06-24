@@ -3,6 +3,10 @@
 import { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useEffect, useState } from 'react';
 import { DataTable } from '@/components/data-table/data-table';
+import { PageHeader } from '@/components/trading/page-header';
+import { Panel } from '@/components/trading/panel';
+import { SideBadge } from '@/components/trading/side-badge';
+import { StatusBadge } from '@/components/trading/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
@@ -25,8 +29,8 @@ const orderColumns: ColumnDef<SafeOrder, unknown>[] = [
     header: 'User',
     cell: ({ row }) => row.original.user?.username ?? row.original.userId.slice(0, 8),
   },
-  { accessorKey: 'type', header: 'Type', id: 'type' },
-  { accessorKey: 'status', header: 'Status', id: 'status' },
+  { accessorKey: 'type', header: 'Type', id: 'type', cell: ({ row }) => <SideBadge side={row.original.type} /> },
+  { accessorKey: 'status', header: 'Status', id: 'status', cell: ({ row }) => <StatusBadge status={row.original.status} /> },
   {
     id: 'quantity',
     header: 'Qty',
@@ -223,20 +227,18 @@ export default function AdminOrdersPage() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Admin Orders</h1>
-        <p className="text-muted-foreground text-sm">
-          Manage platform orders and inject market liquidity so traders can buy and sell
-        </p>
-      </div>
+    <div className="space-y-5">
+      <PageHeader
+        title="Order Management"
+        description="Place orders, inject liquidity, and manage the platform order book"
+      />
 
-      {message && <p className="text-sm text-green-600">{message}</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {message && <p className="text-sm text-gain">{message}</p>}
+      {error && <p className="text-sm text-loss">{error}</p>}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <section className="rounded-lg border p-4 space-y-3">
-          <h2 className="font-semibold">Place order for user</h2>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Place order for user">
+          <div className="space-y-3">
           <select
             className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={singleOrder.userId}
@@ -298,10 +300,11 @@ export default function AdminOrdersPage() {
           <Button className="w-full" onClick={handleCreateOrder}>
             Place order
           </Button>
-        </section>
+          </div>
+        </Panel>
 
-        <section className="rounded-lg border p-4 space-y-3">
-          <h2 className="font-semibold">Instant trade (liquidity pair)</h2>
+        <Panel title="Instant trade (liquidity pair)">
+          <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             Places a sell then a buy at the same price — they match immediately.
           </p>
@@ -363,13 +366,14 @@ export default function AdminOrdersPage() {
             />
             Grant seller shares if needed
           </label>
-          <Button className="w-full" onClick={handleLiquidityPair}>
+          <Button className="w-full" variant="buy" onClick={handleLiquidityPair}>
             Execute pair trade
           </Button>
-        </section>
+          </div>
+        </Panel>
 
-        <section className="rounded-lg border p-4 space-y-3">
-          <h2 className="font-semibold">Add market depth</h2>
+        <Panel title="Add market depth">
+          <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             Resting buy below and sell above market — provides liquidity on the book.
           </p>
@@ -443,7 +447,8 @@ export default function AdminOrdersPage() {
           <Button className="w-full" variant="outline" onClick={handleMarketDepth}>
             Add depth to book
           </Button>
-        </section>
+          </div>
+        </Panel>
       </div>
 
       <div className="flex flex-wrap gap-3">

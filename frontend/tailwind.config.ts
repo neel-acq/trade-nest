@@ -9,6 +9,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -39,6 +42,10 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        gain: 'hsl(var(--gain))',
+        loss: 'hsl(var(--loss))',
+        bid: 'hsl(var(--bid))',
+        ask: 'hsl(var(--ask))',
       },
       borderRadius: {
         lg: 'var(--radius)',

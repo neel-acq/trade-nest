@@ -65,7 +65,7 @@ export function DataTable<T>({
       <div className="flex flex-wrap items-center gap-3">
         {onSearchChange && (
           <Input
-            className="max-w-xs"
+            className="max-w-xs h-9 bg-background"
             placeholder={searchPlaceholder}
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -90,13 +90,13 @@ export function DataTable<T>({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-sm">
-          <thead className="border-b bg-muted/50">
+      <div className="trading-panel overflow-x-auto">
+        <table className="trading-table">
+          <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <th key={header.id} className="px-4 py-3 text-left font-medium">
+                  <th key={header.id} className="text-left">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -108,21 +108,21 @@ export function DataTable<T>({
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="text-center text-muted-foreground py-8">
                   Loading...
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="text-center text-muted-foreground py-8">
                   No results.
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
+                    <td key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -134,7 +134,7 @@ export function DataTable<T>({
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Page {page} of {totalPages} ({total} total)
         </p>
         <div className="flex gap-2">

@@ -4,6 +4,7 @@ import { ColumnDef } from '@tanstack/react-table';
 import { useCallback, useEffect, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { DataTable, exportToCsv } from '@/components/data-table/data-table';
+import { PageHeader } from '@/components/trading/page-header';
 import { Button } from '@/components/ui/button';
 import type { AuthUser } from '@/types';
 import { deleteUser, fetchUsers } from '@/lib/users';
@@ -102,11 +103,11 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">User Management</h1>
-        <p className="text-muted-foreground text-sm">Admin user DataTable</p>
-      </div>
+    <div className="space-y-4">
+      <PageHeader
+        title="User Management"
+        description="Create, view, and manage platform users and roles"
+      />
 
       <DataTable
         columns={columns}
