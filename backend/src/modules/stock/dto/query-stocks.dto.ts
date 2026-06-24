@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export class QueryStocksDto {
   @IsOptional()
@@ -17,7 +17,7 @@ export class QueryStocksDto {
 
   @IsOptional()
   @IsString()
-  @Max(100)
+  @MaxLength(100)
   search?: string;
 
   @IsOptional()

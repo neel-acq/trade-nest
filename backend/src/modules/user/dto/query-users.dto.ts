@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { UserRole } from '@prisma/client';
 
 export class QueryUsersDto {
@@ -18,7 +18,7 @@ export class QueryUsersDto {
 
   @IsOptional()
   @IsString()
-  @Max(100)
+  @MaxLength(100)
   search?: string;
 
   @IsOptional()
