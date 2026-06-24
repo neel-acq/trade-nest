@@ -2,20 +2,22 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { sanitizeRedirectPath } from '@/lib/auth-routes';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CandlestickChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ApiError } from '@/lib/api';
+import { ApiError, NetworkError } from '@/lib/api';
 import { loginRequest } from '@/lib/auth';
 import { loginSchema, type LoginFormValues } from '@/schemas/login.schema';
 import { useAuthStore } from '@/stores/auth-store';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const setAuth = useAuthStore((state) => state.setAuth);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,10 +35,15 @@ export default function LoginPage() {
     try {
       const response = await loginRequest(values.username, values.password);
       setAuth(response.accessToken, response.user);
-      router.push('/dashboard');
+      const destination = sanitizeRedirectPath(searchParams.get('from'));
+      router.push(destination);
     } catch (err) {
       const message =
-        err instanceof ApiError ? err.message : 'Login failed. Please try again.';
+        err instanceof NetworkError
+          ? err.message
+          : err instanceof ApiError
+            ? err.message
+            : 'Login failed. Please try again.';
       setError(message);
     }
   };

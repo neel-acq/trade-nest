@@ -213,8 +213,8 @@ export function LandingPage() {
 function MarketingNav() {
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-md">
-      <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="font-bold text-lg tracking-tight">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+        <Link href="/" className="font-bold text-lg tracking-tight shrink-0">
           Trade<span className="text-primary">Nest</span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
@@ -225,12 +225,22 @@ function MarketingNav() {
             How it works
           </a>
         </nav>
-        <Link
-          href="/login"
-          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Sign In
-        </Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <nav className="flex md:hidden items-center gap-3 text-xs text-muted-foreground">
+            <a href="#features" className="hover:text-foreground">
+              Features
+            </a>
+            <a href="#how-it-works" className="hover:text-foreground">
+              How it works
+            </a>
+          </nav>
+          <Link
+            href="/login"
+            className="inline-flex h-9 items-center rounded-md bg-primary px-3 sm:px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 shrink-0"
+          >
+            Sign In
+          </Link>
+        </div>
       </div>
     </header>
   );

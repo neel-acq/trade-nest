@@ -1,11 +1,11 @@
 import { Suspense } from 'react';
-import { AdminGuard } from '@/components/admin-guard';
+import { GuestGuard } from '@/components/guest-guard';
 import { AuthLoadingScreen } from '@/components/auth-loading-screen';
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<AuthLoadingScreen message="Loading..." />}>
-      <AdminGuard>{children}</AdminGuard>
+      <GuestGuard>{children}</GuestGuard>
     </Suspense>
   );
 }

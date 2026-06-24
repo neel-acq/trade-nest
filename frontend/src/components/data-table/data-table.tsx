@@ -65,7 +65,7 @@ export function DataTable<T>({
       <div className="flex flex-wrap items-center gap-3">
         {onSearchChange && (
           <Input
-            className="max-w-xs h-9 bg-background"
+            className="w-full sm:max-w-xs h-9 bg-background"
             placeholder={searchPlaceholder}
             value={searchValue}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -133,7 +133,7 @@ export function DataTable<T>({
         </table>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <p className="text-xs text-muted-foreground">
           Page {page} of {totalPages} ({total} total)
         </p>

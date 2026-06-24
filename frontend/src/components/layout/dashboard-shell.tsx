@@ -11,11 +11,13 @@ import {
   LayoutDashboard,
   ListOrdered,
   LogOut,
+  Menu,
   Settings,
   Shield,
   Upload,
   Users,
   Wallet,
+  X,
 } from 'lucide-react';
 import { Avatar } from '@/components/avatar';
 import { ConnectionIndicator } from '@/components/realtime/connection-indicator';
@@ -53,6 +55,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const clearAuth = useAuthStore((state) => state.clearAuth);
   const isAdminRoute = pathname.startsWith('/admin');
   const [availableBalance, setAvailableBalance] = useState<number | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (isAdminRoute) return;
@@ -74,9 +81,32 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="trading-theme min-h-screen flex bg-background text-foreground">
-      <aside className="w-60 border-r border-border/80 bg-card/50 flex flex-col shrink-0">
-        <div className="p-4 border-b border-border/60">
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-64 max-w-[85vw] border-r border-border/80 bg-card flex flex-col shrink-0 transition-transform duration-200 lg:static lg:z-auto lg:w-60 lg:max-w-none lg:translate-x-0',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
+        <div className="p-4 border-b border-border/60 flex items-start justify-between gap-2">
           <Brand admin={isAdminRoute} />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="lg:hidden px-2"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
 
         <nav className="flex-1 p-3 flex flex-col gap-0.5 overflow-y-auto">
@@ -86,11 +116,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 Admin Console
               </p>
               {adminNav.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} />
+                <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setSidebarOpen(false)} />
               ))}
               <Link
                 href="/dashboard"
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground mt-4"
+                onClick={() => setSidebarOpen(false)}
               >
                 ← Back to trading
               </Link>
@@ -98,7 +129,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {traderNav.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} />
+                <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setSidebarOpen(false)} />
               ))}
               {user?.role === 'ADMIN' && (
                 <>
@@ -106,7 +137,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     Admin
                   </p>
                   {adminNav.map((item) => (
-                    <NavLink key={item.href} item={item} pathname={pathname} />
+                    <NavLink key={item.href} item={item} pathname={pathname} onNavigate={() => setSidebarOpen(false)} />
                   ))}
                 </>
               )}
@@ -120,11 +151,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-border/60 bg-card/40 px-5 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
+        <header className="border-b border-border/60 bg-card/40 px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden px-2 shrink-0"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+
             {isAdminRoute ? (
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
-                <Shield className="h-3.5 w-3.5" />
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/15 px-2 py-1 text-[10px] sm:text-xs font-semibold text-primary truncate">
+                <Shield className="h-3.5 w-3.5 shrink-0" />
                 Admin Console
               </span>
             ) : (
@@ -134,9 +175,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   Market simulation active
                 </div>
                 {availableBalance !== null && (
-                  <Link href="/wallet" className="wallet-chip hover:bg-accent/60 transition-colors">
-                    <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-muted-foreground">Available</span>
+                  <Link href="/wallet" className="wallet-chip hover:bg-accent/60 transition-colors text-xs sm:text-sm truncate max-w-[9rem] sm:max-w-none">
+                    <Wallet className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-muted-foreground hidden sm:inline">Available</span>
                     <span className={cn('font-semibold text-gain', priceClass)}>
                       {formatInr(availableBalance)}
                     </span>
@@ -146,23 +187,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             {!isAdminRoute && <ConnectionIndicator />}
             <NotificationBell />
             <div className="hidden md:flex items-center gap-2 pl-2 border-l border-border/60">
               {user && <Avatar fullName={user.fullName} className="h-8 w-8 text-xs" />}
               <div className="text-right">
-                <p className="text-sm font-medium leading-none">{user?.fullName}</p>
+                <p className="text-sm font-medium leading-none truncate max-w-[8rem]">{user?.fullName}</p>
                 <p className="text-[10px] text-muted-foreground mt-0.5">{user?.role}</p>
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Logout">
+            <Button variant="ghost" size="sm" onClick={handleLogout} aria-label="Logout" className="px-2">
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-5 overflow-x-hidden">{children}</main>
+        <main className="flex-1 p-3 sm:p-4 md:p-5 overflow-x-hidden pb-16 lg:pb-5">{children}</main>
       </div>
     </div>
   );
@@ -171,7 +212,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 function Brand({ admin }: { admin?: boolean }) {
   return (
     <div>
-      <h2 className="text-xl font-bold tracking-tight">
+      <h2 className="text-lg sm:text-xl font-bold tracking-tight">
         Trade<span className="text-primary">Nest</span>
       </h2>
       <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -184,9 +225,11 @@ function Brand({ admin }: { admin?: boolean }) {
 function NavLink({
   item,
   pathname,
+  onNavigate,
 }: {
   item: { href: string; label: string; icon: React.ComponentType<{ className?: string }> };
   pathname: string;
+  onNavigate?: () => void;
 }) {
   const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
   const Icon = item.icon;
@@ -194,6 +237,7 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors',
         active

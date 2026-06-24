@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Panel } from '@/components/trading/panel';
-import { ApiError } from '@/lib/api';
+import { ApiError, NetworkError } from '@/lib/api';
 import { formatPrice, priceClass } from '@/lib/format';
 import { createOrder } from '@/lib/orders';
 import { orderSchema, toOrderType, type OrderFormValues } from '@/schemas/order.schema';
@@ -63,7 +63,11 @@ export function OrderTicket({ stock, defaultSide = 'BUY', onSuccess, className }
       });
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Order failed');
+      if (err instanceof NetworkError) {
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'Order failed');
+      }
     }
   };
 

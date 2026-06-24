@@ -13,6 +13,13 @@ export class ApiError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message = 'Unable to reach the server. Check your internet connection.') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
 function buildHeaders(options?: RequestInit): HeadersInit {
   const token = useAuthStore.getState().accessToken;
   return {
@@ -26,10 +33,19 @@ export async function apiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: buildHeaders(options),
-  });
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    throw new NetworkError();
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: buildHeaders(options),
+    });
+  } catch {
+    throw new NetworkError();
+  }
 
   if (!response.ok) {
     let message = `API error: ${response.status} ${response.statusText}`;
