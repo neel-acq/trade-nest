@@ -178,9 +178,9 @@ model Order {
   buyTrades  Trade[] @relation("BuyOrder")
   sellTrades Trade[] @relation("SellOrder")
 
-  @@index([userId])
-  @@index([stockId])
-  @@index([status])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@index([stockId, status, type, deletedAt])
   @@map("orders")
 }
 

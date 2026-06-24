@@ -1,19 +1,16 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { Order, OrderStatus, OrderType } from '@prisma/client';
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Order, OrderStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { DomainEventBus } from '@/common/events/domain-event-bus.service';
-import {
-  isBuyOrder,
-  isLimitOrder,
-  isMarketOrder,
-  isSellOrder,
-} from '../../order/entities/order.entity';
 import { OrderRepository } from '../../order/repositories/order.repository';
 import { PortfolioService } from '../../portfolio/services/portfolio.service';
 import { StockService } from '../../stock/services/stock.service';
 import { TradeExecutedEvent } from '../../trade/events/trade-executed.event';
 import { TradeRepository } from '../../trade/repositories/trade.repository';
 import { WalletService } from '../../wallet/services/wallet.service';
+import { MemoryOrderBook, TradeResult } from '../data-structures/memory-order-book';
+import { MemoryOrder } from '../data-structures/memory-order';
+import { isLimitOrder, isMarketOrder } from '../../order/entities/order.entity';
 
 export interface MatchExecutionResult {
   orderId: string;
@@ -22,8 +19,9 @@ export interface MatchExecutionResult {
 }
 
 @Injectable()
-export class MatchingEngineService {
+export class MatchingEngineService implements OnModuleInit {
   private readonly logger = new Logger(MatchingEngineService.name);
+  private books = new Map<string, MemoryOrderBook>();
 
   constructor(
     private readonly orderRepository: OrderRepository,
@@ -34,8 +32,28 @@ export class MatchingEngineService {
     private readonly eventBus: DomainEventBus,
   ) {}
 
+  async onModuleInit() {
+    this.logger.log('Initializing In-Memory Order Books (DSA Showcase)...');
+    const stocks = await this.stockService.getAllStocks();
+    let loadedOrders = 0;
+    
+    for (const stock of stocks) {
+      this.books.set(stock.id, new MemoryOrderBook(stock.id));
+      const openOrders = await this.orderRepository.findOpenOrdersByStock(stock.id);
+      for (const order of openOrders) {
+        this.books.get(stock.id)!.addOrder(new MemoryOrder(order));
+        loadedOrders++;
+      }
+    }
+    this.logger.log(`Loaded ${stocks.length} order books with ${loadedOrders} active orders into memory.`);
+  }
+
+  public getBook(stockId: string): MemoryOrderBook | undefined {
+    return this.books.get(stockId);
+  }
+
   getStatus() {
-    return { module: 'matching', status: 'active', phase: 8 };
+    return { module: 'matching', status: 'active', phase: 8, type: 'in-memory-optimized' };
   }
 
   async processOrder(orderId: string): Promise<MatchExecutionResult> {
@@ -44,137 +62,56 @@ export class MatchingEngineService {
       return { orderId, tradesExecuted: 0, totalQuantityFilled: 0 };
     }
 
-    if (isBuyOrder(order.type)) {
-      return this.matchIncomingBuy(order);
+    const book = this.books.get(order.stockId);
+    if (!book) {
+      this.logger.error(`Order book not found for stock ${order.stockId}`);
+      return { orderId, tradesExecuted: 0, totalQuantityFilled: 0 };
     }
 
-    if (isSellOrder(order.type)) {
-      return this.matchIncomingSell(order);
-    }
-
-    return { orderId, tradesExecuted: 0, totalQuantityFilled: 0 };
-  }
-
-  private async matchIncomingBuy(buyOrder: Order): Promise<MatchExecutionResult> {
-    const sellOrders = await this.orderRepository.findOpenSellOrders(buyOrder.stockId);
-    let tradesExecuted = 0;
+    const memoryOrder = new MemoryOrder(order);
+    
+    // ATOMIC IN-MEMORY MATCHING: O(1) matching from top of book
+    const trades = book.processIncomingOrder(memoryOrder);
+    
     let totalQuantityFilled = 0;
 
-    for (const sellOrder of sellOrders) {
-      const currentBuy = await this.orderRepository.findByIdForUpdate(buyOrder.id);
-      if (!currentBuy || !this.isMatchable(currentBuy)) break;
-
-      const buyRemaining = currentBuy.quantity - currentBuy.filledQuantity;
-      if (buyRemaining <= 0) break;
-
-      const currentSell = await this.orderRepository.findByIdForUpdate(sellOrder.id);
-      if (!currentSell || !this.isMatchable(currentSell)) continue;
-
-      if (currentBuy.userId === currentSell.userId) continue;
-
-      if (!this.canMatch(currentBuy, currentSell)) continue;
-
-      const sellRemaining = currentSell.quantity - currentSell.filledQuantity;
-      const tradeQty = Math.min(buyRemaining, sellRemaining);
-      const tradePrice = Number(currentSell.price ?? 0);
-
-      const sellerAvailable = await this.portfolioService.getHoldingQuantity(
-        currentSell.userId,
-        currentSell.stockId,
-      );
-      if (sellerAvailable < tradeQty) {
-        this.logger.warn(
-          `Skipping match: seller ${currentSell.userId} has insufficient holdings for order ${currentSell.id}`,
-        );
-        continue;
-      }
-
-      const filled = await this.executeTrade({
-        buyOrder: currentBuy,
-        sellOrder: currentSell,
-        quantity: tradeQty,
-        price: tradePrice,
-      });
-
-      tradesExecuted += 1;
+    // ASYNC PERSISTENCE (Write-Behind pattern approach for trades)
+    for (const trade of trades) {
+      const filled = await this.persistTrade(order, trade);
       totalQuantityFilled += filled;
     }
 
-    return { orderId: buyOrder.id, tradesExecuted, totalQuantityFilled };
-  }
-
-  private async matchIncomingSell(sellOrder: Order): Promise<MatchExecutionResult> {
-    const buyOrders = await this.orderRepository.findOpenBuyOrders(sellOrder.stockId);
-    let tradesExecuted = 0;
-    let totalQuantityFilled = 0;
-
-    for (const buyOrder of buyOrders) {
-      const currentSell = await this.orderRepository.findByIdForUpdate(sellOrder.id);
-      if (!currentSell || !this.isMatchable(currentSell)) break;
-
-      const sellRemaining = currentSell.quantity - currentSell.filledQuantity;
-      if (sellRemaining <= 0) break;
-
-      const currentBuy = await this.orderRepository.findByIdForUpdate(buyOrder.id);
-      if (!currentBuy || !this.isMatchable(currentBuy)) continue;
-
-      if (currentBuy.userId === currentSell.userId) continue;
-
-      if (!this.canMatch(currentBuy, currentSell)) continue;
-
-      const buyRemaining = currentBuy.quantity - currentBuy.filledQuantity;
-      const tradeQty = Math.min(buyRemaining, sellRemaining);
-      const tradePrice = Number(currentBuy.price ?? 0);
-
-      const sellerAvailable = await this.portfolioService.getHoldingQuantity(
-        currentSell.userId,
-        currentSell.stockId,
-      );
-      if (sellerAvailable < tradeQty) {
-        this.logger.warn(
-          `Skipping match: seller ${currentSell.userId} has insufficient holdings for order ${currentSell.id}`,
-        );
-        continue;
-      }
-
-      const filled = await this.executeTrade({
-        buyOrder: currentBuy,
-        sellOrder: currentSell,
-        quantity: tradeQty,
-        price: tradePrice,
-      });
-
-      tradesExecuted += 1;
-      totalQuantityFilled += filled;
+    if (memoryOrder.isMarket && memoryOrder.remaining > 0) {
+       await this.orderRepository.updateFill(order.id, memoryOrder.filledQuantity, OrderStatus.CANCELLED);
+       // Note: Wallet release is normally handled by the Order Service when status changes to CANCELLED.
+       // The matching engine shouldn't double-release.
     }
 
-    return { orderId: sellOrder.id, tradesExecuted, totalQuantityFilled };
+    return { orderId, tradesExecuted: trades.length, totalQuantityFilled };
   }
 
-  private canMatch(buyOrder: Order, sellOrder: Order): boolean {
-    const buyPrice = Number(buyOrder.price ?? 0);
-    const sellPrice = Number(sellOrder.price ?? 0);
-
-    if (isMarketOrder(buyOrder.type) || isMarketOrder(sellOrder.type)) {
-      return true;
+  public async cancelOrder(orderId: string, stockId: string) {
+    const book = this.books.get(stockId);
+    if (book) {
+      book.cancelOrder(orderId);
     }
-
-    return buyPrice >= sellPrice;
   }
 
-  private async executeTrade(params: {
-    buyOrder: Order;
-    sellOrder: Order;
-    quantity: number;
-    price: number;
-  }): Promise<number> {
-    const { buyOrder, sellOrder, quantity, price } = params;
-    if (quantity <= 0) {
-      throw new BadRequestException('Trade quantity must be positive');
-    }
+  private async persistTrade(incomingOrder: Order, trade: TradeResult): Promise<number> {
+    const { buyOrderId, sellOrderId, price, quantity } = trade;
+
+    if (quantity <= 0) return 0;
 
     const tradeAmount = Number((price * quantity).toFixed(2));
     const tradeId = this.generateTradeId();
+
+    const buyOrder = buyOrderId === incomingOrder.id ? incomingOrder : await this.orderRepository.findByIdForUpdate(buyOrderId);
+    const sellOrder = sellOrderId === incomingOrder.id ? incomingOrder : await this.orderRepository.findByIdForUpdate(sellOrderId);
+
+    if (!buyOrder || !sellOrder) {
+       this.logger.error(`Order not found during trade persistence: Buy ${buyOrderId}, Sell ${sellOrderId}`);
+       return 0;
+    }
 
     await this.tradeRepository.create({
       tradeId,
@@ -195,21 +132,13 @@ export class MatchingEngineService {
       const limitPrice = Number(buyOrder.price ?? 0);
       if (limitPrice > price) {
         const improvement = Number(((limitPrice - price) * quantity).toFixed(2));
-        await this.walletService.unlockFunds(
-          buyOrder.userId,
-          improvement,
-          `price_improvement:${tradeId}`,
-        );
+        await this.walletService.unlockFunds(buyOrder.userId, improvement, `price_improvement:${tradeId}`);
       }
     } else if (isMarketOrder(buyOrder.type)) {
       const refPrice = Number(buyOrder.price ?? 0);
       if (refPrice > price) {
         const improvement = Number(((refPrice - price) * quantity).toFixed(2));
-        await this.walletService.unlockFunds(
-          buyOrder.userId,
-          improvement,
-          `market_price_improvement:${tradeId}`,
-        );
+        await this.walletService.unlockFunds(buyOrder.userId, improvement, `market_price_improvement:${tradeId}`);
       }
     }
 
@@ -237,8 +166,7 @@ export class MatchingEngineService {
 
   private async updateOrderAfterFill(order: Order, fillQty: number) {
     const newFilled = order.filledQuantity + fillQty;
-    const status =
-      newFilled >= order.quantity ? OrderStatus.FILLED : OrderStatus.PARTIAL;
+    const status = newFilled >= order.quantity ? OrderStatus.FILLED : OrderStatus.PARTIAL;
     await this.orderRepository.updateFill(order.id, newFilled, status);
   }
 

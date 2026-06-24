@@ -16,8 +16,8 @@ describe('MatchingEngineService', () => {
     Pick<
       OrderRepository,
       | 'findByIdForUpdate'
-      | 'findOpenSellOrders'
-      | 'findOpenBuyOrders'
+      | 'findById'
+      | 'findOpenOrdersByStock'
       | 'updateFill'
     >
   >;
@@ -26,8 +26,10 @@ describe('MatchingEngineService', () => {
   let portfolioService: jest.Mocked<
     Pick<PortfolioService, 'getHoldingQuantity' | 'applyBuyTrade' | 'applySellTrade'>
   >;
-  let stockService: jest.Mocked<Pick<StockService, 'recordTrade'>>;
+  let stockService: jest.Mocked<Pick<StockService, 'recordTrade' | 'getAllStocks' | 'getStockById'>>;
   let eventBus: jest.Mocked<Pick<DomainEventBus, 'publish'>>;
+
+  const stock1 = { id: 'stock-1', symbol: 'TEST' };
 
   const buyOrder = {
     id: 'buy-1',
@@ -66,8 +68,8 @@ describe('MatchingEngineService', () => {
   beforeEach(async () => {
     orderRepository = {
       findByIdForUpdate: jest.fn(),
-      findOpenSellOrders: jest.fn(),
-      findOpenBuyOrders: jest.fn(),
+      findById: jest.fn(),
+      findOpenOrdersByStock: jest.fn(),
       updateFill: jest.fn(),
     };
     tradeRepository = { create: jest.fn().mockResolvedValue({ tradeId: 'TRD-TEST' }) };
@@ -81,7 +83,11 @@ describe('MatchingEngineService', () => {
       applyBuyTrade: jest.fn().mockResolvedValue({}),
       applySellTrade: jest.fn().mockResolvedValue({}),
     };
-    stockService = { recordTrade: jest.fn().mockResolvedValue({}) };
+    stockService = { 
+        recordTrade: jest.fn().mockResolvedValue({}),
+        getAllStocks: jest.fn().mockResolvedValue([stock1]),
+        getStockById: jest.fn().mockResolvedValue(stock1)
+    };
     eventBus = { publish: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -100,12 +106,14 @@ describe('MatchingEngineService', () => {
   });
 
   it('matches incoming buy with resting sell at sell price (price-time priority)', async () => {
+    orderRepository.findOpenOrdersByStock.mockResolvedValue([sellOrder as any]);
+    await service.onModuleInit();
+
     orderRepository.findByIdForUpdate
-      .mockResolvedValueOnce(buyOrder)
-      .mockResolvedValueOnce(buyOrder)
-      .mockResolvedValueOnce(sellOrder);
-    orderRepository.findOpenSellOrders.mockResolvedValue([sellOrder]);
-    orderRepository.updateFill.mockResolvedValue(buyOrder);
+      .mockResolvedValueOnce(buyOrder as any) // The incoming order
+      .mockResolvedValueOnce(sellOrder as any); // During persist trade (sell)
+      
+    orderRepository.updateFill.mockResolvedValue(buyOrder as any);
 
     const result = await service.processOrder('buy-1');
 
@@ -121,14 +129,16 @@ describe('MatchingEngineService', () => {
     );
     expect(walletService.settleBuy).toHaveBeenCalledWith('buyer', 950, expect.any(String));
     expect(walletService.credit).toHaveBeenCalledWith('seller', 950, expect.any(String));
-    expect(walletService.unlockFunds).toHaveBeenCalledWith('buyer', 50, expect.any(String));
+    expect(walletService.unlockFunds).toHaveBeenCalledWith('buyer', 50, expect.any(String)); // price improvement 100 - 95 = 5 * 10 = 50
     expect(eventBus.publish).toHaveBeenCalledWith(expect.any(TradeExecutedEvent));
   });
 
   it('does not match when buy limit is below sell limit', async () => {
+    orderRepository.findOpenOrdersByStock.mockResolvedValue([sellOrder as any]);
+    await service.onModuleInit();
+
     const lowBuy = { ...buyOrder, price: new Decimal(90) };
-    orderRepository.findByIdForUpdate.mockResolvedValue(lowBuy);
-    orderRepository.findOpenSellOrders.mockResolvedValue([sellOrder]);
+    orderRepository.findByIdForUpdate.mockResolvedValue(lowBuy as any);
 
     const result = await service.processOrder('buy-1');
 
@@ -138,10 +148,10 @@ describe('MatchingEngineService', () => {
 
   it('skips self-trade between same user', async () => {
     const selfSell = { ...sellOrder, userId: 'buyer' };
-    orderRepository.findByIdForUpdate
-      .mockResolvedValueOnce(buyOrder)
-      .mockResolvedValueOnce(buyOrder);
-    orderRepository.findOpenSellOrders.mockResolvedValue([selfSell]);
+    orderRepository.findOpenOrdersByStock.mockResolvedValue([selfSell as any]);
+    await service.onModuleInit();
+
+    orderRepository.findByIdForUpdate.mockResolvedValue(buyOrder as any);
 
     const result = await service.processOrder('buy-1');
 

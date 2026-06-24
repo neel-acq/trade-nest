@@ -4,54 +4,29 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-    --gain: 142 71% 40%;
-    --loss: 0 72% 51%;
-    --bid: 142 71% 40%;
-    --ask: 0 72% 51%;
-    --surface-elevated: 210 40% 98%;
-  }
-
-  .trading-theme {
-    --background: 224 28% 7%;
+    --background: 224 28% 5%;
     --foreground: 210 25% 96%;
-    --card: 224 22% 10%;
+    --card: 224 28% 8%;
     --card-foreground: 210 25% 96%;
     --primary: 217 91% 60%;
-    --primary-foreground: 224 28% 7%;
-    --secondary: 224 18% 14%;
+    --primary-foreground: 224 28% 5%;
+    --secondary: 224 20% 12%;
     --secondary-foreground: 210 25% 96%;
-    --muted: 224 18% 14%;
-    --muted-foreground: 215 14% 58%;
-    --accent: 224 18% 16%;
+    --muted: 224 20% 12%;
+    --muted-foreground: 215 14% 65%;
+    --accent: 224 20% 16%;
     --accent-foreground: 210 25% 96%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 210 25% 96%;
-    --border: 224 16% 18%;
-    --input: 224 16% 18%;
+    --border: 224 20% 14%;
+    --input: 224 20% 14%;
     --ring: 217 91% 60%;
+    --radius: 0.75rem;
     --gain: 142 71% 45%;
     --loss: 0 72% 58%;
     --bid: 142 71% 45%;
     --ask: 0 72% 58%;
-    --surface-elevated: 224 20% 12%;
+    --surface-elevated: 224 22% 10%;
     color-scheme: dark;
   }
 }
@@ -62,16 +37,18 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.15) 0%, rgba(0, 0, 0, 0) 50%);
+    background-attachment: fixed;
   }
 }
 
 @layer components {
   .trading-panel {
-    @apply rounded-lg border border-border bg-card shadow-sm;
+    @apply rounded-xl border border-white/5 bg-card/60 backdrop-blur-xl shadow-2xl;
   }
 
   .trading-theme .trading-panel {
-    @apply bg-card/80 backdrop-blur-sm border-border/80;
+    @apply bg-card/60 backdrop-blur-xl border-white/5;
   }
 
   .trading-table {

@@ -143,6 +143,12 @@ export class StockRepository {
     });
   }
 
+  findAll(): Promise<Stock[]> {
+    return this.prisma.stock.findMany({
+      where: { deletedAt: null },
+    });
+  }
+
   async findManyPaginated(params: FindStocksParams) {
     const {
       page,

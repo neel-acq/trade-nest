@@ -23,12 +23,18 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '../.env'],
     }),
+    ThrottlerModule.forRoot([{
+      ttl: 60000,
+      limit: 100, // 100 requests per minute per IP
+    }]),
     EventEmitterModule.forRoot({
       wildcard: false,
       delimiter: '.',
@@ -54,6 +60,7 @@ import { RolesGuard } from './common/guards/roles.guard';
   controllers: [AppController],
   providers: [
     AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

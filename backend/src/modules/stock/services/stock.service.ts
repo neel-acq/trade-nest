@@ -60,6 +60,11 @@ export class StockService {
     return toSafeStock(stock);
   }
 
+  async getAllStocks() {
+    const stocks = await this.stockRepository.findAll();
+    return stocks.map(toSafeStock);
+  }
+
   async getStockBySymbol(symbol: string) {
     const stock = await this.stockRepository.findBySymbol(symbol);
     if (!stock) {
