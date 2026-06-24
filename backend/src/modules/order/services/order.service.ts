@@ -12,6 +12,8 @@ import { StockService } from '../../stock/services/stock.service';
 import { UserService } from '../../user/services/user.service';
 import { WalletService } from '../../wallet/services/wallet.service';
 import { CreateOrderDto } from '../dto/create-order.dto';
+import { AdminCreateOrderDto } from '../dto/admin-create-order.dto';
+import { AdminLiquidityPairDto, AdminMarketDepthDto } from '../dto/admin-liquidity.dto';
 import { QueryOrdersDto } from '../dto/query-orders.dto';
 import {
   isBuyOrder,
@@ -40,7 +42,11 @@ export class OrderService {
     return { module: 'order', status: 'active', phase: 7 };
   }
 
-  async createOrder(userId: string, dto: CreateOrderDto): Promise<SafeOrder> {
+  async createOrder(
+    userId: string,
+    dto: CreateOrderDto,
+    options?: { isSystemGenerated?: boolean; createdBy?: string },
+  ): Promise<SafeOrder> {
     const stock = await this.stockService.getStockById(dto.stockId);
     const orderPrice = this.resolveOrderPrice(dto.type, dto.price, stock.currentPrice);
     let lockedAmount = 0;
@@ -50,15 +56,25 @@ export class OrderService {
     }
 
     if (isBuyOrder(dto.type)) {
-      lockedAmount = Number((orderPrice * dto.quantity).toFixed(2));
+      if (isMarketOrder(dto.type)) {
+        lockedAmount = await this.orderRepository.estimateMarketBuyLockAmount(
+          dto.stockId,
+          dto.quantity,
+          stock.currentPrice,
+        );
+      } else {
+        lockedAmount = Number((orderPrice * dto.quantity).toFixed(2));
+      }
       await this.walletService.lockFunds(userId, lockedAmount, `order_lock:${dto.type}`);
     }
 
     if (isSellOrder(dto.type)) {
       const holdingQty = await this.portfolioService.getHoldingQuantity(userId, dto.stockId);
-      if (holdingQty < dto.quantity) {
+      const reservedQty = await this.orderRepository.sumOpenSellQuantity(userId, dto.stockId);
+      const availableQty = holdingQty - reservedQty;
+      if (availableQty < dto.quantity) {
         throw new BadRequestException(
-          `Insufficient holdings. Available: ${holdingQty}, requested: ${dto.quantity}`,
+          `Insufficient holdings. Available: ${availableQty}, requested: ${dto.quantity}`,
         );
       }
     }
@@ -72,7 +88,8 @@ export class OrderService {
         status: OrderStatus.OPEN,
         quantity: dto.quantity,
         price: orderPrice,
-        createdBy: userId,
+        isSystemGenerated: options?.isSystemGenerated ?? false,
+        createdBy: options?.createdBy ?? userId,
       });
     } catch (error) {
       if (isBuyOrder(dto.type) && lockedAmount > 0) {
@@ -98,6 +115,113 @@ export class OrderService {
     );
 
     return toSafeOrder(withRelations);
+  }
+
+  async createOrderAsAdmin(adminId: string, dto: AdminCreateOrderDto): Promise<SafeOrder> {
+    await this.userService.findById(dto.userId);
+    const { userId, ...orderDto } = dto;
+    return this.createOrder(userId, orderDto, { createdBy: adminId });
+  }
+
+  async createLiquidityPair(adminId: string, dto: AdminLiquidityPairDto) {
+    if (dto.sellerUserId === dto.buyerUserId) {
+      throw new BadRequestException('Buyer and seller must be different users');
+    }
+
+    await this.userService.findById(dto.sellerUserId);
+    await this.userService.findById(dto.buyerUserId);
+    const stock = await this.stockService.getStockById(dto.stockId);
+
+    await this.ensureSellerHoldings(
+      dto.sellerUserId,
+      dto.stockId,
+      dto.quantity,
+      Number(stock.currentPrice),
+      dto.grantSellerShares ?? true,
+    );
+
+    const sellOrder = await this.createOrder(
+      dto.sellerUserId,
+      {
+        stockId: dto.stockId,
+        type: OrderType.LIMIT_SELL,
+        quantity: dto.quantity,
+        price: dto.price,
+      },
+      { createdBy: adminId },
+    );
+
+    const buyOrder = await this.createOrder(
+      dto.buyerUserId,
+      {
+        stockId: dto.stockId,
+        type: OrderType.LIMIT_BUY,
+        quantity: dto.quantity,
+        price: dto.price,
+      },
+      { createdBy: adminId },
+    );
+
+    return {
+      message:
+        dto.price > 0
+          ? 'Liquidity pair placed — buy order should match the resting sell at the same price'
+          : 'Liquidity pair placed',
+      sellOrder,
+      buyOrder,
+    };
+  }
+
+  async createMarketDepth(adminId: string, dto: AdminMarketDepthDto) {
+    if (dto.sellerUserId === dto.buyerUserId) {
+      throw new BadRequestException('Buyer and seller must be different users');
+    }
+
+    if (dto.buyPrice > dto.sellPrice) {
+      throw new BadRequestException(
+        'Buy price cannot exceed sell price for resting depth. Use liquidity pair for crossing trades.',
+      );
+    }
+
+    await this.userService.findById(dto.sellerUserId);
+    await this.userService.findById(dto.buyerUserId);
+    const stock = await this.stockService.getStockById(dto.stockId);
+
+    await this.ensureSellerHoldings(
+      dto.sellerUserId,
+      dto.stockId,
+      dto.quantity,
+      Number(stock.currentPrice),
+      dto.grantSellerShares ?? true,
+    );
+
+    const sellOrder = await this.createOrder(
+      dto.sellerUserId,
+      {
+        stockId: dto.stockId,
+        type: OrderType.LIMIT_SELL,
+        quantity: dto.quantity,
+        price: dto.sellPrice,
+      },
+      { createdBy: adminId },
+    );
+
+    const buyOrder = await this.createOrder(
+      dto.buyerUserId,
+      {
+        stockId: dto.stockId,
+        type: OrderType.LIMIT_BUY,
+        quantity: dto.quantity,
+        price: dto.buyPrice,
+      },
+      { createdBy: adminId },
+    );
+
+    return {
+      message: 'Market depth orders placed on the book',
+      sellOrder,
+      buyOrder,
+    };
   }
 
   async cancelOrder(
@@ -238,40 +362,45 @@ export class OrderService {
       };
     }
 
-    const buyOrder = await this.orderRepository.create({
-      userId: buyer.id,
-      stockId: stock.id,
-      type: OrderType.LIMIT_BUY,
-      status: OrderStatus.OPEN,
-      quantity: 10,
-      price: Number(stock.currentPrice) - 5,
-      isSystemGenerated: true,
-    });
+    const crossPrice = Number(stock.currentPrice);
+    const depthBuyPrice = Number((crossPrice - 5).toFixed(2));
+    const depthSellPrice = Number((crossPrice + 5).toFixed(2));
 
-    const sellOrder = await this.orderRepository.create({
+    await this.portfolioService.upsertSystemHolding({
       userId: seller.id,
       stockId: stock.id,
-      type: OrderType.LIMIT_SELL,
-      status: OrderStatus.OPEN,
-      quantity: 10,
-      price: Number(stock.currentPrice) + 5,
-      isSystemGenerated: true,
+      quantity: 100,
+      averageBuyPrice: crossPrice,
+      investedAmount: crossPrice * 100,
     });
 
-    for (const order of [buyOrder, sellOrder]) {
-      this.eventBus.publish(
-        new OrderCreatedEvent({
-          orderId: order.id,
-          userId: order.userId,
-          stockId: order.stockId,
-          type: order.type,
-          quantity: order.quantity,
-          price: Number(order.price),
-        }),
-      );
-    }
+    const sellOrder = await this.createOrder(
+      seller.id,
+      {
+        stockId: stock.id,
+        type: OrderType.LIMIT_SELL,
+        quantity: 10,
+        price: depthSellPrice,
+      },
+      { isSystemGenerated: true },
+    );
 
-    return { created: 2, orders: [buyOrder.id, sellOrder.id] };
+    const buyOrder = await this.createOrder(
+      buyer.id,
+      {
+        stockId: stock.id,
+        type: OrderType.LIMIT_BUY,
+        quantity: 10,
+        price: depthBuyPrice,
+      },
+      { isSystemGenerated: true },
+    );
+
+    return {
+      created: 2,
+      orders: [sellOrder.id, buyOrder.id],
+      message: 'Resting buy/sell depth placed around RELIANCE market price',
+    };
   }
   async deleteSystemOrders() {
     const deleted = await this.orderRepository.deleteSystemGenerated();
@@ -291,5 +420,38 @@ export class OrderService {
       throw new BadRequestException('Limit orders require a positive price');
     }
     return limitPrice;
+  }
+
+  private async ensureSellerHoldings(
+    sellerUserId: string,
+    stockId: string,
+    quantity: number,
+    referencePrice: number,
+    grantShares: boolean,
+  ) {
+    const holdingQty = await this.portfolioService.getHoldingQuantity(sellerUserId, stockId);
+    const reservedQty = await this.orderRepository.sumOpenSellQuantity(sellerUserId, stockId);
+    const availableQty = holdingQty - reservedQty;
+
+    if (availableQty >= quantity) {
+      return;
+    }
+
+    if (!grantShares) {
+      throw new BadRequestException(
+        `Seller has insufficient shares. Available: ${availableQty}, required: ${quantity}`,
+      );
+    }
+
+    const shortfall = quantity - availableQty;
+    const newQuantity = holdingQty + shortfall;
+
+    await this.portfolioService.upsertSystemHolding({
+      userId: sellerUserId,
+      stockId,
+      quantity: newQuantity,
+      averageBuyPrice: referencePrice,
+      investedAmount: Number((referencePrice * newQuantity).toFixed(2)),
+    });
   }
 }

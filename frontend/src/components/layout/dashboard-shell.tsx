@@ -24,6 +24,7 @@ const navItems = [
 const adminItems = [
   { href: '/admin/users', label: 'Users' },
   { href: '/admin/wallets', label: 'Wallets' },
+  { href: '/admin/orders', label: 'Orders' },
   { href: '/admin/stocks', label: 'Import Stocks' },
   { href: '/admin/logs', label: 'Logs' },
 ];

@@ -33,3 +33,53 @@ export function createOrder(payload: CreateOrderPayload) {
 export function cancelOrder(orderId: string) {
   return apiFetch<SafeOrder>(`/orders/${orderId}/cancel`, { method: 'POST' });
 }
+
+export interface AdminCreateOrderPayload extends CreateOrderPayload {
+  userId: string;
+}
+
+export interface AdminLiquidityPairPayload {
+  stockId: string;
+  sellerUserId: string;
+  buyerUserId: string;
+  quantity: number;
+  price: number;
+  grantSellerShares?: boolean;
+}
+
+export interface AdminMarketDepthPayload {
+  stockId: string;
+  sellerUserId: string;
+  buyerUserId: string;
+  quantity: number;
+  sellPrice: number;
+  buyPrice: number;
+  grantSellerShares?: boolean;
+}
+
+export function createAdminOrder(payload: AdminCreateOrderPayload) {
+  return apiFetch<SafeOrder>('/orders/admin', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createLiquidityPair(payload: AdminLiquidityPairPayload) {
+  return apiFetch<{ message: string; sellOrder: SafeOrder; buyOrder: SafeOrder }>(
+    '/orders/admin/liquidity-pair',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function createMarketDepth(payload: AdminMarketDepthPayload) {
+  return apiFetch<{ message: string; sellOrder: SafeOrder; buyOrder: SafeOrder }>(
+    '/orders/admin/market-depth',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+  );
+}

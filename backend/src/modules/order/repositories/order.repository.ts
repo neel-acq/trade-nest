@@ -119,6 +119,49 @@ export class OrderRepository {
     });
   }
 
+  async sumOpenSellQuantity(userId: string, stockId: string): Promise<number> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        userId,
+        stockId,
+        deletedAt: null,
+        status: { in: openStatuses },
+        type: { in: [OrderType.LIMIT_SELL, OrderType.MARKET_SELL] },
+      },
+      select: { quantity: true, filledQuantity: true },
+    });
+
+    return orders.reduce((sum, order) => sum + (order.quantity - order.filledQuantity), 0);
+  }
+
+  async estimateMarketBuyLockAmount(
+    stockId: string,
+    quantity: number,
+    fallbackPrice: number,
+  ): Promise<number> {
+    const sellOrders = await this.findOpenSellOrders(stockId);
+    let remaining = quantity;
+    let totalCost = 0;
+
+    for (const sellOrder of sellOrders) {
+      if (remaining <= 0) break;
+
+      const sellRemaining = sellOrder.quantity - sellOrder.filledQuantity;
+      if (sellRemaining <= 0) continue;
+
+      const take = Math.min(remaining, sellRemaining);
+      const price = Number(sellOrder.price ?? fallbackPrice);
+      totalCost += take * price;
+      remaining -= take;
+    }
+
+    if (remaining > 0) {
+      totalCost += remaining * fallbackPrice;
+    }
+
+    return Number(totalCost.toFixed(2));
+  }
+
   findOpenOrdersByStock(stockId: string): Promise<Order[]> {
     return this.prisma.order.findMany({
       where: {

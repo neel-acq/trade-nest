@@ -201,6 +201,16 @@ export class MatchingEngineService {
           `price_improvement:${tradeId}`,
         );
       }
+    } else if (isMarketOrder(buyOrder.type)) {
+      const refPrice = Number(buyOrder.price ?? 0);
+      if (refPrice > price) {
+        const improvement = Number(((refPrice - price) * quantity).toFixed(2));
+        await this.walletService.unlockFunds(
+          buyOrder.userId,
+          improvement,
+          `market_price_improvement:${tradeId}`,
+        );
+      }
     }
 
     await this.portfolioService.applyBuyTrade(buyOrder.userId, buyOrder.stockId, quantity, price);
