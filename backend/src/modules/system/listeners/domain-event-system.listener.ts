@@ -4,6 +4,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { DomainEvent } from '@/common/events/domain-event.interface';
 import { AUTH_EVENTS } from '../../auth/events/auth.events';
 import { ORDER_EVENTS } from '../../order/events/order.events';
+import { STOCK_EVENTS } from '../../stock/events/stock.events';
 import { TRADE_EVENTS } from '../../trade/events/trade.events';
 import { SystemService } from '../services/system.service';
 
@@ -38,6 +39,19 @@ export class DomainEventSystemListener {
       `Order cancelled: ${event.payload.orderId}`,
       'order.lifecycle',
       event.payload,
+    );
+  }
+
+  @OnEvent(STOCK_EVENTS.STOCK_UPDATED)
+  handleStockUpdated(event: DomainEvent) {
+    const updatedFields = event.payload.updatedFields as string[] | undefined;
+    if (!updatedFields?.includes('currentPrice')) return;
+
+    this.safeInfo(
+      `Stock price updated: ${event.payload.symbol}`,
+      'stock.price',
+      event.payload,
+      LogType.INFO,
     );
   }
 

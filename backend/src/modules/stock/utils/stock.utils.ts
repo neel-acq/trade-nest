@@ -1,6 +1,16 @@
 /**
- * Generates synthetic daily OHLC history for chart display.
+ * Generates synthetic OHLC history for chart display with mean-reversion toward base price.
  */
+function seededRandom(seed: string, index: number): number {
+  let hash = 0;
+  const input = `${seed}:${index}`;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return (Math.abs(hash) % 10000) / 10000;
+}
+
 export function generatePriceHistory(
   stockId: string,
   basePrice: number,
@@ -8,28 +18,40 @@ export function generatePriceHistory(
   interval = '1d',
 ) {
   const points = [];
-  let price = basePrice * 0.85;
+  const startPrice = basePrice * 0.88;
+  let price = startPrice;
   const now = new Date();
+  const pointsCount = interval === '1h' ? Math.min(days * 24, 168) : days;
 
-  for (let i = days; i >= 0; i -= 1) {
+  for (let i = pointsCount; i >= 0; i -= 1) {
     const date = new Date(now);
-    date.setDate(date.getDate() - i);
-    date.setHours(0, 0, 0, 0);
+    if (interval === '1h') {
+      date.setHours(date.getHours() - i, 0, 0, 0);
+    } else {
+      date.setDate(date.getDate() - i);
+      date.setHours(0, 0, 0, 0);
+    }
 
-    const volatility = basePrice * 0.02;
+    const progress = (pointsCount - i) / Math.max(pointsCount, 1);
+    const target = startPrice + (basePrice - startPrice) * progress;
+    const volatility = basePrice * (interval === '1h' ? 0.006 : 0.018);
+    const noise = (seededRandom(stockId, i) - 0.5) * volatility;
+    const reversion = (target - price) * 0.12;
+
     const open = price;
-    const change = (Math.random() - 0.48) * volatility;
-    const close = Math.max(1, Number((open + change).toFixed(2)));
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5;
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5;
-    const volume = Math.floor(500000 + Math.random() * 2000000);
+    const close = Math.max(1, Number((open + noise + reversion).toFixed(2)));
+    const wick = volatility * (0.3 + seededRandom(stockId, i + 1000) * 0.5);
+    const high = Number((Math.max(open, close) + wick).toFixed(2));
+    const low = Number(Math.max(0.01, Math.min(open, close) - wick).toFixed(2));
+    const volumeBase = interval === '1h' ? 50000 : 800000;
+    const volume = Math.floor(volumeBase + seededRandom(stockId, i + 2000) * volumeBase * 2);
 
     points.push({
       stockId,
       timestamp: date,
-      open: Number(open.toFixed(2)),
-      high: Number(high.toFixed(2)),
-      low: Number(Math.max(0.01, low).toFixed(2)),
+      open,
+      high,
+      low,
       close,
       volume,
       interval,
@@ -38,9 +60,11 @@ export function generatePriceHistory(
     price = close;
   }
 
-  // Ensure last close matches current price
   if (points.length > 0) {
-    points[points.length - 1].close = basePrice;
+    const last = points[points.length - 1];
+    last.close = basePrice;
+    last.high = Math.max(last.high, basePrice);
+    last.low = Math.min(last.low, basePrice);
   }
 
   return points;

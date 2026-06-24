@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { DomainEvent } from '@/common/events/domain-event.interface';
 import { ORDER_EVENTS } from '../../order/events/order.events';
+import { STOCK_EVENTS } from '../../stock/events/stock.events';
 import { StockService } from '../../stock/services/stock.service';
 import { TRADE_EVENTS } from '../../trade/events/trade.events';
 import { WALLET_EVENTS } from '../../wallet/events/wallet.events';
@@ -61,29 +62,28 @@ export class DomainEventRealtimeListener {
   async handleTradeExecuted(event: DomainEvent) {
     const stockId = event.payload.stockId as string;
     const price = event.payload.price as number;
-    const symbolFromPayload = event.payload.symbol as string | undefined;
     const buyUserId = event.payload.buyUserId as string | undefined;
     const sellUserId = event.payload.sellUserId as string | undefined;
 
     try {
-      const stock = symbolFromPayload
-        ? { symbol: symbolFromPayload, currentPrice: price }
-        : await this.stockService.getStockById(stockId);
+      const stockRecord = await this.stockService.getStockById(stockId);
       const payload = {
         ...event.payload,
-        symbol: stock.symbol,
+        symbol: stockRecord.symbol,
         occurredAt: event.occurredAt.toISOString(),
       };
 
-      this.broadcast.emitToStock(stock.symbol, REALTIME_EVENTS.TRADE_EXECUTED, payload);
-      this.broadcast.emitStockPrice(stock.symbol, {
-        symbol: stock.symbol,
+      this.broadcast.emitToStock(stockRecord.symbol, REALTIME_EVENTS.TRADE_EXECUTED, payload);
+      this.broadcast.emitStockPrice(stockRecord.symbol, {
+        symbol: stockRecord.symbol,
         stockId,
         price,
-        currentPrice: Number(stock.currentPrice ?? price),
+        currentPrice: Number(stockRecord.currentPrice),
+        changePrice: Number(stockRecord.changePrice),
+        changePercentage: Number(stockRecord.changePercentage),
         timestamp: event.occurredAt.toISOString(),
       });
-      this.broadcast.emitOrderBookUpdated(stock.symbol);
+      this.broadcast.emitOrderBookUpdated(stockRecord.symbol);
 
       if (buyUserId) {
         this.broadcast.emitToUser(buyUserId, REALTIME_EVENTS.TRADE_EXECUTED, {
@@ -99,6 +99,31 @@ export class DomainEventRealtimeListener {
       }
     } catch (error) {
       this.logger.warn(`Failed to broadcast trade for stock ${stockId}`, error);
+    }
+  }
+
+  @OnEvent(STOCK_EVENTS.STOCK_UPDATED)
+  async handleStockUpdated(event: DomainEvent) {
+    const stockId = event.payload.stockId as string;
+    const updatedFields = event.payload.updatedFields as string[] | undefined;
+
+    if (!updatedFields?.includes('currentPrice')) {
+      return;
+    }
+
+    try {
+      const stock = await this.stockService.getStockById(stockId);
+      this.broadcast.emitStockPrice(stock.symbol, {
+        symbol: stock.symbol,
+        stockId,
+        price: Number(stock.currentPrice),
+        currentPrice: Number(stock.currentPrice),
+        changePrice: Number(stock.changePrice),
+        changePercentage: Number(stock.changePercentage),
+        timestamp: event.occurredAt.toISOString(),
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to broadcast stock update for ${stockId}`, error);
     }
   }
 

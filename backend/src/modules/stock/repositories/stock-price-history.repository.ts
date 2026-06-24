@@ -48,4 +48,51 @@ export class StockPriceHistoryRepository {
       where: { stockId, interval, deletedAt: null },
     });
   }
+
+  findByStockAndTimestamp(stockId: string, timestamp: Date, interval: string) {
+    return this.prisma.stockPriceHistory.findUnique({
+      where: {
+        stockId_timestamp_interval: { stockId, timestamp, interval },
+      },
+    });
+  }
+
+  async upsertTradeCandle(
+    stockId: string,
+    timestamp: Date,
+    interval: string,
+    price: number,
+    quantity: number,
+  ) {
+    const existing = await this.findByStockAndTimestamp(stockId, timestamp, interval);
+
+    if (existing) {
+      const high = Math.max(Number(existing.high), price);
+      const low = Math.min(Number(existing.low), price);
+      return this.prisma.stockPriceHistory.update({
+        where: { id: existing.id },
+        data: {
+          high,
+          low,
+          close: price,
+          volume: { increment: BigInt(quantity) },
+          isSystemGenerated: false,
+        },
+      });
+    }
+
+    return this.prisma.stockPriceHistory.create({
+      data: {
+        stockId,
+        timestamp,
+        interval,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: BigInt(quantity),
+        isSystemGenerated: false,
+      },
+    });
+  }
 }

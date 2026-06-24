@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/trading/page-header';
 import { Panel } from '@/components/trading/panel';
+import { useMarketsRealtime } from '@/hooks/use-realtime';
 import type { SafeStock } from '@/types';
 import { fetchStocks } from '@/lib/stocks';
 import { formatPercent, formatPrice, formatQty, priceClass } from '@/lib/format';
@@ -47,6 +48,35 @@ export default function StocksPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useMarketsRealtime(
+    stocks.map((s) => s.symbol),
+    (update) => {
+      setStocks((prev) =>
+        prev.map((stock) =>
+          stock.symbol === update.symbol
+            ? {
+                ...stock,
+                currentPrice: update.currentPrice,
+                changePrice:
+                  update.changePrice ??
+                  Number((update.currentPrice - stock.previousPrice).toFixed(2)),
+                changePercentage:
+                  update.changePercentage ??
+                  (stock.previousPrice === 0
+                    ? 0
+                    : Number(
+                        (
+                          ((update.currentPrice - stock.previousPrice) / stock.previousPrice) *
+                          100
+                        ).toFixed(4),
+                      )),
+              }
+            : stock,
+        ),
+      );
+    },
+  );
 
   const totalPages = Math.ceil(total / limit) || 1;
 

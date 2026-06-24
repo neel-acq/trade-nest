@@ -28,9 +28,13 @@ export function fetchStockBySymbol(symbol: string) {
   return apiFetch<SafeStock>(`/stocks/symbol/${encodeURIComponent(symbol)}`);
 }
 
-export function fetchStockHistory(symbol: string, limit = 90) {
+export function fetchStockHistory(
+  symbol: string,
+  options: { interval?: '1d' | '1h'; limit?: number } = {},
+) {
+  const { interval = '1d', limit = 90 } = options;
   return apiFetch<StockHistoryResponse>(
-    `/stocks/symbol/${encodeURIComponent(symbol)}/history?interval=1d&limit=${limit}`,
+    `/stocks/symbol/${encodeURIComponent(symbol)}/history?interval=${interval}&limit=${limit}`,
   );
 }
 

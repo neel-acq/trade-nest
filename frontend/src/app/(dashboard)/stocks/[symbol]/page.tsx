@@ -8,12 +8,23 @@ import { OrderBookPanel } from '@/components/stocks/order-book-panel';
 import { RecentTradesPanel } from '@/components/stocks/recent-trades-panel';
 import { OrderTicket } from '@/components/trading/order-ticket';
 import { Panel } from '@/components/trading/panel';
+import { Button } from '@/components/ui/button';
 import { useStockRealtime } from '@/hooks/use-realtime';
 import type { SafeStock, StockHistoryPoint } from '@/types';
 import { fetchOrderBook, type OrderBookSnapshot } from '@/lib/matching';
 import { fetchStockBySymbol, fetchStockHistory } from '@/lib/stocks';
 import { formatPercent, formatPrice, formatQty, priceClass } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+type ChartInterval = '1d' | '1h';
+
+const RANGE_OPTIONS: { label: string; limit: number; intervals: ChartInterval[] }[] = [
+  { label: '7D', limit: 7, intervals: ['1d', '1h'] },
+  { label: '30D', limit: 30, intervals: ['1d', '1h'] },
+  { label: '90D', limit: 90, intervals: ['1d'] },
+  { label: '180D', limit: 180, intervals: ['1d'] },
+  { label: '1Y', limit: 365, intervals: ['1d'] },
+];
 
 export default function StockDetailPage() {
   const params = useParams<{ symbol: string }>();
@@ -23,6 +34,8 @@ export default function StockDetailPage() {
   const [orderBook, setOrderBook] = useState<OrderBookSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [tradesTick, setTradesTick] = useState(0);
+  const [chartInterval, setChartInterval] = useState<ChartInterval>('1d');
+  const [chartLimit, setChartLimit] = useState(90);
 
   const refreshOrderBook = useCallback(async () => {
     if (!symbol) return;
@@ -34,18 +47,56 @@ export default function StockDetailPage() {
     }
   }, [symbol]);
 
-  const refreshLiveData = useCallback(async () => {
-    await refreshOrderBook();
-    setTradesTick((value) => value + 1);
+  const refreshHistory = useCallback(async () => {
+    if (!symbol) return;
     try {
-      const stockData = await fetchStockBySymbol(symbol);
-      setStock(stockData);
+      const historyData = await fetchStockHistory(symbol, {
+        interval: chartInterval,
+        limit: chartLimit,
+      });
+      setHistory(historyData.data);
     } catch {
       /* best-effort */
     }
-  }, [symbol, refreshOrderBook]);
+  }, [symbol, chartInterval, chartLimit]);
 
-  useStockRealtime(symbol, refreshLiveData);
+  const applyPriceUpdate = useCallback((currentPrice: number, changePrice?: number, changePercentage?: number) => {
+    setStock((prev) => {
+      if (!prev) return prev;
+      const nextChangePrice =
+        changePrice ?? Number((currentPrice - prev.previousPrice).toFixed(2));
+      const nextChangePercentage =
+        changePercentage ??
+        (prev.previousPrice === 0
+          ? 0
+          : Number(((nextChangePrice / prev.previousPrice) * 100).toFixed(4)));
+      return {
+        ...prev,
+        currentPrice,
+        changePrice: nextChangePrice,
+        changePercentage: nextChangePercentage,
+      };
+    });
+  }, []);
+
+  useStockRealtime(symbol, (event) => {
+    if (event.type === 'price') {
+      applyPriceUpdate(
+        event.data.currentPrice,
+        event.data.changePrice,
+        event.data.changePercentage,
+      );
+      void refreshHistory();
+      setTradesTick((value) => value + 1);
+    }
+    if (event.type === 'trade') {
+      void refreshHistory();
+      setTradesTick((value) => value + 1);
+    }
+    if (event.type === 'orderbook' || event.type === 'trade') {
+      void refreshOrderBook();
+    }
+  });
 
   useEffect(() => {
     if (!symbol) return;
@@ -55,7 +106,7 @@ export default function StockDetailPage() {
       try {
         const [stockData, historyData, bookData] = await Promise.all([
           fetchStockBySymbol(symbol),
-          fetchStockHistory(symbol),
+          fetchStockHistory(symbol, { interval: chartInterval, limit: chartLimit }),
           fetchOrderBook(symbol),
         ]);
         setStock(stockData);
@@ -67,7 +118,7 @@ export default function StockDetailPage() {
     }
 
     load();
-  }, [symbol]);
+  }, [symbol, chartInterval, chartLimit]);
 
   if (loading) {
     return <p className="text-muted-foreground text-sm">Loading {symbol}...</p>;
@@ -85,6 +136,8 @@ export default function StockDetailPage() {
   }
 
   const positive = stock.changePercentage >= 0;
+  const chartTitle =
+    chartInterval === '1h' ? `Chart · ${chartLimit}D hourly` : `Chart · ${chartLimit}D`;
 
   return (
     <div className="space-y-4">
@@ -99,7 +152,9 @@ export default function StockDetailPage() {
           </div>
         </div>
         <div className="text-right">
-          <p className={cn('text-3xl font-bold', priceClass)}>{formatPrice(stock.currentPrice)}</p>
+          <p className={cn('text-2xl sm:text-3xl font-bold', priceClass)}>
+            {formatPrice(stock.currentPrice)}
+          </p>
           <p className={cn('text-sm font-medium', positive ? 'text-gain' : 'text-loss')}>
             {positive ? '+' : ''}
             {stock.changePrice.toFixed(2)} ({formatPercent(stock.changePercentage)})
@@ -116,9 +171,47 @@ export default function StockDetailPage() {
 
       <div className="grid xl:grid-cols-[1fr_320px] gap-4">
         <div className="space-y-4 min-w-0">
-          <Panel title="Chart · 90D" dense>
+          <Panel
+            title={chartTitle}
+            dense
+            action={
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex gap-1">
+                  {(['1d', '1h'] as const).map((iv) => (
+                    <Button
+                      key={iv}
+                      variant={chartInterval === iv ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => {
+                        setChartInterval(iv);
+                        if (iv === '1h' && chartLimit > 30) setChartLimit(7);
+                      }}
+                    >
+                      {iv === '1d' ? 'Daily' : 'Hourly'}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex gap-1">
+                  {RANGE_OPTIONS.filter((opt) => opt.intervals.includes(chartInterval)).map(
+                    (opt) => (
+                      <Button
+                        key={opt.label}
+                        variant={chartLimit === opt.limit ? 'default' : 'outline'}
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => setChartLimit(opt.limit)}
+                      >
+                        {opt.label}
+                      </Button>
+                    ),
+                  )}
+                </div>
+              </div>
+            }
+          >
             <div className="p-2">
-              <StockChart data={history} height={380} dark />
+              <StockChart data={history} height={380} dark interval={chartInterval} />
             </div>
           </Panel>
 
@@ -133,7 +226,14 @@ export default function StockDetailPage() {
         </div>
 
         <div className="xl:sticky xl:top-4 xl:self-start">
-          <OrderTicket stock={stock} onSuccess={refreshLiveData} />
+          <OrderTicket
+            stock={stock}
+            onSuccess={() => {
+              void refreshOrderBook();
+              void refreshHistory();
+              setTradesTick((value) => value + 1);
+            }}
+          />
         </div>
       </div>
     </div>

@@ -59,7 +59,10 @@ export class AuditService {
       logType?: LogType;
     },
   ) {
-    const userId = (payload.userId as string | undefined) ?? undefined;
+    const userId =
+      (payload.userId as string | undefined) ??
+      (payload.buyUserId as string | undefined) ??
+      (payload.sellUserId as string | undefined);
     const action = options?.action ?? eventName;
     const entityId =
       options?.entityId ??

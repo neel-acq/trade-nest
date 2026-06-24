@@ -7,9 +7,20 @@ import { WalletModule } from '../wallet/wallet.module';
 import { OrderModule } from '../order/order.module';
 import { TradeModule } from '../trade/trade.module';
 import { PortfolioModule } from '../portfolio/portfolio.module';
+import { AuditModule } from '../audit/audit.module';
+import { SystemModule } from '../system/system.module';
 
 @Module({
-  imports: [UserModule, StockModule, WalletModule, OrderModule, TradeModule, PortfolioModule],
+  imports: [
+    UserModule,
+    StockModule,
+    WalletModule,
+    OrderModule,
+    TradeModule,
+    PortfolioModule,
+    AuditModule,
+    SystemModule,
+  ],
   controllers: [SeederController],
   providers: [SeederService],
   exports: [SeederService],

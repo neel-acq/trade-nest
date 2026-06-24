@@ -43,6 +43,16 @@ export class SeederController {
     return this.seederService.seedAll();
   }
 
+  @Post('logs')
+  seedLogs() {
+    return this.seederService.seedBootstrapLogs();
+  }
+
+  @Post('price-history')
+  seedPriceHistory() {
+    return this.seederService.seedPriceHistory();
+  }
+
   @Delete('trades')
   deleteTrades() {
     return this.seederService.deleteTrades();

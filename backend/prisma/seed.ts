@@ -1,8 +1,9 @@
-import { PrismaClient, OrderStatus, OrderType } from '@prisma/client';
+import { PrismaClient, OrderStatus, OrderType, LogType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { buildStockMetrics, INITIAL_WALLET_BALANCE } from './data/constants';
 import { SEED_STOCKS } from './data/stocks.data';
 import { DEFAULT_SEED_PASSWORD, SEED_USERS } from './data/users.data';
+import { generatePriceHistory } from '../src/modules/stock/utils/stock.utils';
 
 const prisma = new PrismaClient();
 
@@ -52,6 +53,131 @@ async function seedStocks() {
     skipDuplicates: true,
   });
   console.log(`Seeded ${SEED_STOCKS.length} stocks`);
+}
+
+async function seedPriceHistory() {
+  const existing = await prisma.stockPriceHistory.count();
+  if (existing > 0) {
+    console.log(`Skipping price history — ${existing} records already exist`);
+    return;
+  }
+
+  const stocks = await prisma.stock.findMany({ where: { isSystemGenerated: true } });
+  let created = 0;
+
+  for (const stock of stocks) {
+    const basePrice = Number(stock.currentPrice);
+    for (const interval of ['1d', '1h'] as const) {
+      const limit = interval === '1d' ? 90 : 7;
+      const points = generatePriceHistory(stock.id, basePrice, limit, interval);
+      await prisma.stockPriceHistory.createMany({
+        data: points.map((p) => ({
+          stockId: p.stockId,
+          timestamp: p.timestamp,
+          open: p.open,
+          high: p.high,
+          low: p.low,
+          close: p.close,
+          volume: BigInt(p.volume),
+          interval: p.interval,
+          isSystemGenerated: true,
+        })),
+        skipDuplicates: true,
+      });
+      created += points.length;
+    }
+  }
+
+  console.log(`Seeded ${created} price history candles`);
+}
+
+async function seedLogs() {
+  const existing = await prisma.auditLog.count();
+  if (existing > 0) {
+    console.log(`Skipping logs — ${existing} audit logs already exist`);
+    return;
+  }
+
+  const admin = await prisma.user.findFirst({ where: { username: 'admin_01' } });
+  const trader = await prisma.user.findFirst({ where: { username: 'trader_01' } });
+  const stock = await prisma.stock.findFirst({ where: { symbol: 'RELIANCE' } });
+
+  await prisma.auditLog.createMany({
+    data: [
+      {
+        userId: admin?.id,
+        action: 'PLATFORM_INITIALIZED',
+        entityType: 'System',
+        logType: LogType.INFO,
+        metadata: { message: 'TradeNest demo environment bootstrapped' },
+      },
+      {
+        userId: admin?.id,
+        action: 'STOCKS_SEEDED',
+        entityType: 'Stock',
+        entityId: stock?.id,
+        logType: LogType.AUDIT,
+        metadata: { count: SEED_STOCKS.length },
+      },
+      {
+        userId: trader?.id,
+        action: 'WALLET_CREDITED',
+        entityType: 'Wallet',
+        entityId: trader?.id,
+        logType: LogType.SUCCESS,
+        metadata: { amount: INITIAL_WALLET_BALANCE, reason: 'Initial demo balance' },
+      },
+      {
+        userId: trader?.id,
+        action: 'ORDER_CREATED',
+        entityType: 'Order',
+        logType: LogType.AUDIT,
+        metadata: { symbol: 'RELIANCE', side: 'BUY', type: 'LIMIT' },
+      },
+      {
+        userId: trader?.id,
+        action: 'TRADE_EXECUTED',
+        entityType: 'Trade',
+        entityId: 'TRD-SEED-0001',
+        logType: LogType.SUCCESS,
+        metadata: { symbol: 'RELIANCE', quantity: 10 },
+      },
+    ],
+  });
+
+  await prisma.systemLog.createMany({
+    data: [
+      {
+        message: 'TradeNest platform started successfully',
+        context: 'system.bootstrap',
+        logType: LogType.INFO,
+        metadata: { version: '1.0.0' },
+      },
+      {
+        message: 'Matching engine initialized',
+        context: 'matching.engine',
+        logType: LogType.SUCCESS,
+      },
+      {
+        message: 'WebSocket realtime gateway listening',
+        context: 'realtime.gateway',
+        logType: LogType.INFO,
+      },
+      {
+        message: 'Demo stocks and wallets loaded',
+        context: 'seed.bootstrap',
+        logType: LogType.INFO,
+        metadata: { stocks: SEED_STOCKS.length, users: SEED_USERS.length },
+      },
+      {
+        message: 'Sample market depth orders created for RELIANCE',
+        context: 'order.seed',
+        logType: LogType.INFO,
+      },
+    ],
+  });
+
+  console.log('Seeded audit and system logs');
 }
 
 async function seedWallets() {
@@ -174,6 +300,8 @@ async function main() {
   await seedWallets();
   await seedOrders();
   await seedTrades();
+  await seedPriceHistory();
+  await seedLogs();
 }
 
 main()

@@ -12,7 +12,7 @@ export function Panel({ title, action, children, className, dense }: PanelProps)
   return (
     <section className={cn('trading-panel overflow-hidden', className)}>
       {title && (
-        <div className="flex items-center justify-between border-b border-border/60 px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 px-4 py-2.5">
           <h2 className="text-sm font-semibold">{title}</h2>
           {action}
         </div>

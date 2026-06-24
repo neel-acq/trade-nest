@@ -285,6 +285,28 @@ export class StockService {
     return results;
   }
 
+  async seedAllPriceHistory() {
+    const stocks = await this.stockRepository.findSystemGenerated();
+    let seeded = 0;
+
+    for (const stock of stocks) {
+      for (const interval of ['1d', '1h'] as const) {
+        const count = await this.priceHistoryRepository.countByStockId(stock.id, interval);
+        if (count > 0) continue;
+        const days = interval === '1d' ? 90 : 7;
+        await this.ensurePriceHistory(
+          stock.id,
+          Number(stock.currentPrice),
+          interval,
+          days,
+        );
+        seeded += 1;
+      }
+    }
+
+    return { seeded, message: seeded > 0 ? 'Price history generated' : 'Already exists' };
+  }
+
   private async ensurePriceHistory(
     stockId: string,
     basePrice: number,
@@ -320,15 +342,75 @@ export class StockService {
       return null;
     }
 
+    const previousPrice = Number(existing.previousPrice);
+    const previousVolume = Number(existing.previousVolume);
     const currentVolume = Number(existing.currentVolume) + quantity;
-    const metrics = buildStockMetrics(price, currentVolume);
+    const changePrice = Number((price - previousPrice).toFixed(2));
+    const changeVolume = currentVolume - previousVolume;
+    const changePercentage =
+      previousPrice === 0
+        ? 0
+        : Number(((changePrice / previousPrice) * 100).toFixed(4));
+    const volumePercentage =
+      previousVolume === 0
+        ? 0
+        : Number(((changeVolume / previousVolume) * 100).toFixed(4));
 
     const stock = await this.stockRepository.update(stockId, {
       currentPrice: price,
       currentVolume,
-      ...metrics,
+      changePrice,
+      changeVolume,
+      changePercentage,
+      volumePercentage,
     });
 
+    await this.appendTradeToPriceHistory(stockId, price, quantity);
+
+    this.eventBus.publish(
+      new StockUpdatedEvent({
+        stockId: stock.id,
+        symbol: stock.symbol,
+        updatedFields: [
+          'currentPrice',
+          'currentVolume',
+          'changePrice',
+          'changePercentage',
+        ],
+      }),
+    );
+
     return toSafeStock(stock);
+  }
+
+  private async appendTradeToPriceHistory(
+    stockId: string,
+    price: number,
+    quantity: number,
+  ) {
+    const now = new Date();
+
+    const dayStart = new Date(now);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const hourStart = new Date(now);
+    hourStart.setMinutes(0, 0, 0);
+
+    await Promise.all([
+      this.priceHistoryRepository.upsertTradeCandle(
+        stockId,
+        dayStart,
+        '1d',
+        price,
+        quantity,
+      ),
+      this.priceHistoryRepository.upsertTradeCandle(
+        stockId,
+        hourStart,
+        '1h',
+        price,
+        quantity,
+      ),
+    ]);
   }
 }
