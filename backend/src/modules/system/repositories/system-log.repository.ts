@@ -30,7 +30,7 @@ export class SystemLogRepository {
       data: {
         message: data.message,
         context: data.context,
-        metadata: data.metadata ?? undefined,
+        metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
         logType: data.logType ?? LogType.INFO,
       },
     });

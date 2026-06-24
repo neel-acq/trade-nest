@@ -5,6 +5,7 @@ import { StockCreatedEvent } from '../events/stock-created.event';
 import { StockUpdatedEvent } from '../events/stock-updated.event';
 import { StockRepository } from '../repositories/stock.repository';
 import { StockService } from '../services/stock.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 describe('StockService', () => {
   let service: StockService;
@@ -69,7 +70,7 @@ describe('StockService', () => {
     it('returns paginated stocks with numeric volumes', async () => {
       stockRepository.findManyPaginated.mockResolvedValue({
         total: 1,
-        stocks: [mockStock],
+        stocks: [mockStock as any],
       });
 
       const result = await service.listStocks({ page: 1, limit: 10, search: 'REL' });
@@ -82,7 +83,17 @@ describe('StockService', () => {
 
   describe('createStock', () => {
     it('throws when symbol already exists', async () => {
-      stockRepository.findBySymbol.mockResolvedValue(mockStock);
+      stockRepository.findBySymbol.mockResolvedValue({
+        ...mockStock,
+        currentPrice: new Decimal(mockStock.currentPrice),
+        previousPrice: new Decimal(mockStock.previousPrice),
+        changePrice: new Decimal(mockStock.changePrice),
+        changeVolume: BigInt(mockStock.changeVolume),
+        currentVolume: BigInt(mockStock.currentVolume),
+        previousVolume: BigInt(mockStock.previousVolume),
+        volumePercentage: new Decimal(mockStock.volumePercentage),
+        changePercentage: new Decimal(mockStock.changePercentage),
+      });
 
       await expect(
         service.createStock({
@@ -96,7 +107,17 @@ describe('StockService', () => {
 
     it('creates stock and publishes StockCreated event', async () => {
       stockRepository.findBySymbol.mockResolvedValue(null);
-      stockRepository.create.mockResolvedValue(mockStock);
+      stockRepository.create.mockResolvedValue({
+        ...mockStock,
+        currentPrice: new Decimal(mockStock.currentPrice),
+        previousPrice: new Decimal(mockStock.previousPrice),
+        changePrice: new Decimal(mockStock.changePrice),
+        changeVolume: BigInt(mockStock.changeVolume),
+        currentVolume: BigInt(mockStock.currentVolume),
+        previousVolume: BigInt(mockStock.previousVolume),
+        volumePercentage: new Decimal(mockStock.volumePercentage),
+        changePercentage: new Decimal(mockStock.changePercentage),
+      });
 
       const result = await service.createStock({
         symbol: 'reliance',
@@ -120,8 +141,28 @@ describe('StockService', () => {
     });
 
     it('updates stock and publishes StockUpdated event', async () => {
-      stockRepository.findById.mockResolvedValue(mockStock);
-      stockRepository.update.mockResolvedValue({ ...mockStock, currentPrice: 2500 });
+      stockRepository.findById.mockResolvedValue({
+        ...mockStock,
+        currentPrice: new Decimal(mockStock.currentPrice),
+        previousPrice: new Decimal(mockStock.previousPrice),
+        changePrice: new Decimal(mockStock.changePrice),
+        changeVolume: BigInt(mockStock.changeVolume),
+        currentVolume: BigInt(mockStock.currentVolume),
+        previousVolume: BigInt(mockStock.previousVolume),
+        volumePercentage: new Decimal(mockStock.volumePercentage),
+        changePercentage: new Decimal(mockStock.changePercentage),
+      });
+      stockRepository.update.mockResolvedValue({
+        ...mockStock,
+        currentPrice: new Decimal(2500),
+        previousPrice: new Decimal(mockStock.previousPrice),
+        changePrice: new Decimal(mockStock.changePrice),
+        changeVolume: BigInt(mockStock.changeVolume),
+        currentVolume: BigInt(mockStock.currentVolume),
+        previousVolume: BigInt(mockStock.previousVolume),
+        volumePercentage: new Decimal(mockStock.volumePercentage),
+        changePercentage: new Decimal(mockStock.changePercentage),
+      });
 
       await service.updateStock('stock-1', { currentPrice: 2500 });
 

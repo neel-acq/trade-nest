@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatus, OrderType } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { DomainEventBus } from '@/common/events/domain-event-bus.service';
 import { OrderRepository } from '../../order/repositories/order.repository';
 import { PortfolioService } from '../../portfolio/services/portfolio.service';
@@ -36,7 +37,7 @@ describe('MatchingEngineService', () => {
     status: OrderStatus.OPEN,
     quantity: 10,
     filledQuantity: 0,
-    price: 100,
+    price: new Decimal(100),
     isSystemGenerated: false,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
@@ -53,7 +54,7 @@ describe('MatchingEngineService', () => {
     status: OrderStatus.OPEN,
     quantity: 10,
     filledQuantity: 0,
-    price: 95,
+    price: new Decimal(95),
     isSystemGenerated: false,
     createdAt: new Date('2024-01-02'),
     updatedAt: new Date('2024-01-02'),
@@ -125,7 +126,7 @@ describe('MatchingEngineService', () => {
   });
 
   it('does not match when buy limit is below sell limit', async () => {
-    const lowBuy = { ...buyOrder, price: 90 };
+    const lowBuy = { ...buyOrder, price: new Decimal(90) };
     orderRepository.findByIdForUpdate.mockResolvedValue(lowBuy);
     orderRepository.findOpenSellOrders.mockResolvedValue([sellOrder]);
 

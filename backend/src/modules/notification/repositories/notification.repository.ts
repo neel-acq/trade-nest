@@ -33,7 +33,7 @@ export class NotificationRepository {
         title: data.title,
         message: data.message,
         link: data.link,
-        metadata: data.metadata ?? undefined,
+        metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
       },
     });
   }

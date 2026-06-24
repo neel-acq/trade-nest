@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserRole } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 import { StockService } from '../../stock/services/stock.service';
 import { UserService } from '../../user/services/user.service';
 import { PortfolioRepository } from '../repositories/portfolio.repository';
@@ -22,9 +23,9 @@ describe('PortfolioService', () => {
     userId: 'user-1',
     stockId: 'stock-1',
     quantity: 10,
-    averageBuyPrice: 100,
-    investedAmount: 1000,
-    realizedPnL: 50,
+    averageBuyPrice: new Decimal(100),
+    investedAmount: new Decimal(1000),
+    realizedPnL: new Decimal(50),
     isSystemGenerated: false,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -34,7 +35,7 @@ describe('PortfolioService', () => {
     stock: {
       symbol: 'RELIANCE',
       companyName: 'Reliance',
-      currentPrice: 110,
+      currentPrice: new Decimal(110),
     },
   };
 

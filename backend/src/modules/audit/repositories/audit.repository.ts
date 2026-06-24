@@ -39,7 +39,7 @@ export class AuditRepository {
         action: data.action,
         entityType: data.entityType,
         entityId: data.entityId,
-        metadata: data.metadata ?? undefined,
+        metadata: (data.metadata as Prisma.InputJsonValue) ?? undefined,
         logType: data.logType ?? LogType.AUDIT,
       },
     });

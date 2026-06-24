@@ -1,5 +1,6 @@
 import { BaseDomainEvent } from '@/common/events/domain-event.interface';
 import { USER_EVENTS } from './user.events';
+import { UserRole } from '@prisma/client';
 
 export class UserCreatedEvent extends BaseDomainEvent {
   constructor(payload: {
